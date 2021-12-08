@@ -6,12 +6,24 @@ find_package(catkin REQUIRED COMPONENTS
   rospy
   std_msgs
   geometry_msgs
+  nav_msgs
+  message_generation
+)
+
+add_service_files (
+  FILES
+  update_waypoint.srv
+)
+
+generate_messages(
+   DEPENDENCIES
+   geometry_msgs   nav_msgs   std_msgs
 )
 
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES blue_rov_custom_integration
-   CATKIN_DEPENDS roscpp rospy
+#  CATKIN_DEPENDS roscpp
 #  DEPENDS system_lib
 )
 

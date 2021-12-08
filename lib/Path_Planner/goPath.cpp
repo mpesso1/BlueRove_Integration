@@ -309,6 +309,14 @@ void root::MeanTraj::update_J(int step) {
     }
 }
 
+Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> root::MeanTraj::trajectory_translational() {
+    return final_pos;
+}
+
+Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> root::MeanTraj::trajectory_angular() {
+    return mean_state;
+}
+
 void root::MeanTraj::traj(int go) {
 
     if (go == 1) {

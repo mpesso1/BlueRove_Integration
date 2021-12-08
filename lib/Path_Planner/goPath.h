@@ -150,6 +150,11 @@ namespace root {
 
             void update_optimizaion();
             // function that updates variables used within update rule... as states change
+
+            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> trajectory_translational();
+
+            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> trajectory_angular();
+
     
     };
 }
