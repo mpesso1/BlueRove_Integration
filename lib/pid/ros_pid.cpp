@@ -8,16 +8,22 @@ PID controller with desired DOF
 
 //Contructor
 pid::rosPID::rosPID(int dof, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> pg, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> ig, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> dg) {
+    
+    DOF = dof;
+    proportional_gain.resize(DOF,1);
+    derivative_gain.resize(DOF,1);
+    integral_gain.resize(DOF,1);
+
     if (pg.cols() > 1) {
-        pg = pg.transpose();
+        proportional_gain = pg.transpose();
     }
     if (ig.cols() > 1) {
-        ig = ig.transpose();
+        integral_gain = ig.transpose();
     }
     if (dg.cols() > 1) {
-        dg = dg.transpose();
+        derivative_gain = dg.transpose();
     }
-    DOF = dof;
+    
     proportional_gain = pg;
     integral_gain = ig;
     derivative_gain = dg;

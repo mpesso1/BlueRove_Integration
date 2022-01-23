@@ -251,17 +251,18 @@ void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,
     update_g();
 
 
-    for (int i=0;i<500;i++) { // number of iteration of optimizaion.  This needs a new criterion to define when it finishes
+    for (int i=0;i<200;i++) { // number of iteration of optimizaion.  This needs a new criterion to define when it finishes
         final_pos = final_pos - (sensitivity[0])*Kp*(sensitivity[1]*Kp_inv*(final_pos-mean_pos) + g_pos.transpose());
         final_vel = final_vel - (sensitivity[0])*Kv*(sensitivity[1]*Kv_inv*(final_vel-mean_vel) + g_vel.transpose());
         
-        if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
-          std::cout << final_pos.transpose() << std::endl;
-        }
+        //if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
+        //  std::cout << final_pos.transpose() << std::endl;
+        //}
+        std::cout << i << std::endl;
         if (final_pos.isApprox(check_pos)) {
+            std::cout << "Path converged\n";
             break;
         }
-
         update_optimizaion();
     }
 }

@@ -17,7 +17,7 @@ bool NEW_TRAJ = true; // boolian defining if new path needs to be generated
 int STEP = 0; // index of what step the pid is on
 
 const int DOF = 6; // Degrees of freedom
-const int STEPS = 20; // steps within trajectory
+const int STEPS = 60; // steps within trajectory
 const int OCV = 3; // object concering DOF
 
 const float WHOLE_SENSITIVITY = 5.0; // UNIQUE TO PATH PLANNER --> check goPath.h for explination
@@ -27,7 +27,7 @@ const float POWER_SENSITIVITY = 2.0;
 
 
 // Path Planning Object --------------------
-MeanTraj BlueRov(DOF, STEPS+1, OCV);
+MeanTraj BlueRov(DOF, STEPS, OCV);
 // -----------------------------------------
 
 
@@ -40,8 +40,8 @@ void add_object_xyz(float x_local, float y_local, float z_local);
 
 
 // ----------- Trajectory --------------------
-Eigen::Matrix<float,20+1, 3> path_trans; //******** Need to figure out how to put variables in Eigen -- messy!!
-Eigen::Matrix<float,20+1, 3> path_angular; // not getting used right now
+Eigen::Matrix<float,60+1, 3> path_trans; //******** Need to figure out how to put variables in Eigen -- messy!!
+Eigen::Matrix<float,60+1, 3> path_angular; // not getting used right now
 // -------------------------------------------
 
 
@@ -49,25 +49,24 @@ Eigen::Matrix<float,20+1, 3> path_angular; // not getting used right now
 bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, blue_rov_custom_integration::update_waypoint::Response &res) {
     if (NEW_TRAJ) {
         BlueRov.add_DOF(MAX_ACCEL, req.x_vel, req.x, 4., 0, true); // acceleration, init velocity, init poition, final position, indx, boolian defining ocv
-        BlueRov.add_DOF(MAX_ACCEL, req.y_vel, req.y, 7., 1, true); 
+        BlueRov.add_DOF(MAX_ACCEL+.1, req.y_vel, req.y, 7., 1, true); 
         BlueRov.add_DOF(MAX_ACCEL, req.z_vel, req.z, 12., 2, true);
         BlueRov.add_DOF(MAX_ACCEL, req.thx_vel, req.thx, 4., 3, false);
         BlueRov.add_DOF(MAX_ACCEL, req.thy_vel, req.thy, 4., 4, false);
         BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, 5., 5, false);
 
-        BlueRov.optimize(objx,objy,objz); 
 
+        BlueRov.optimize(objx,objy,objz); 
         path_trans = BlueRov.trajectory_translational();
-        path_angular = BlueRov.trajectory_angular();
+        //path_angular = BlueRov.trajectory_angular();
         NEW_TRAJ = false;
     }
-
     res.x_way = path_trans(STEP,0);
     res.y_way = path_trans(STEP,1);
     res.z_way = path_trans(STEP,2);
     res.thx_way = 0; //  Need to figure out if path planner will affect the non ocv when optimizing path
     res.thy_way = 0;
-    res.thz_way = std::atan2(res.y_way,res.x_way);
+    res.thz_way = 0; //std::atan2(res.y_way,res.x_way); // --> Need to define this better!
 
     STEP = STEP + 1;
 

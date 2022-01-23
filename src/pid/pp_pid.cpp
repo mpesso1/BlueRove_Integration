@@ -11,7 +11,7 @@
 // GLOBAL VARIABLES --------------------
 const int DOF = 6; // Degrees of Freedom
 int COUNT = 0; // couting variable used in script, only needed for first iteration
-const float TOLERANCE = .001; // defines how close the desired and current states need to be to one another
+const float TOLERANCE = .0001; // defines how close the desired and current states need to be to one another
 float td; // "time difference" defined by chrono library
 // -------------------------------------
 
@@ -110,6 +110,7 @@ int main(int argc, char** argv) {
         desired(3) = waypoint.response.thx_way;
         desired(4) = waypoint.response.thy_way;
         desired(5) = waypoint.response.thz_way;
+
     }
     else {
         std::cout << "Waypoint Server Not Responding\n";
@@ -145,7 +146,7 @@ int main(int argc, char** argv) {
             waypoint.request.thx = current(3);
             waypoint.request.thy = current(4);
             waypoint.request.thy = current(5);
-
+            
             if (client1.call(waypoint)) {
                 desired(0) = waypoint.response.x_way;
                 desired(1) = waypoint.response.y_way;
@@ -155,10 +156,12 @@ int main(int argc, char** argv) {
                 desired(5) = waypoint.response.thz_way;
             }
         }
-        
+
         ros::spinOnce();
 
         loop_rate.sleep();
+
+        COUNT = 1;
 
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     }
