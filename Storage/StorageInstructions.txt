@@ -1,0 +1,36 @@
+
+DIRECTORY ORGANIZAION
+
+    Data is stored by the date: /Storage/Month/Day
+
+    Each day consist of a Notes.txt file for important observations, and a Paths folder for storing paths generated
+
+    Each path generated within the paths folder should be named in ascending order starting at path1.txt
+
+    Additional data stored should be stored in the Day folder where notes is stored.
+
+STORING PATH DATA
+
+    The path and object locations should be the output of the pp_node.  In order to get the output data into the corect file use linux redirecting
+        $ rosrun blue_rov_custom_integration pp_node > Storage/1/31/Paths/path1.txt
+        The > symbol signifies redirection of data. 
+        ** You must be carfule with this operator. 
+            -: > will clear data currently in path1.txt and replace it with new directed data. (This is what we want)
+            -: >> Will not clear data and will just add directed data at the end of what is already there. (Dont want this. Will not work with plotter)
+            -: < Will Do the compete oposite, taking what ever is in path1.txt and directing it to pp_node (Be carful)
+            -: << Makes computer explode
+
+            * Additonally if you put nothing in front of ">" i.e. 
+            $ > Storage/1/31/Paths/path1.txt 
+            then it will empty the file. This can be handy, but also cautious. Ofcouse can be fixed with Ctlr+z.
+
+    More generally the directory definition coming after ">" is a local directory. Therefore I would sugest being in the blue_rov_custom_integration folder
+    when you make the call. 
+
+PLOTTING DATA  
+    
+    The PlotResults.py file in /Storage contains a script to plot the data out of the file of your choosing.
+
+    In order to sync the script with the file containing data simply define the data and file name in the two variable at the begining of the script.
+
+    Look at comments at begining of script on possible errors

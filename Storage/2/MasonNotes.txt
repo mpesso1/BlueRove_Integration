@@ -1,0 +1,43 @@
+Current Status:
+
+    Currently have everything configured in ros and everything is communicating.
+
+    Will begin configuring the tuning inputs of the algorithm and PID in February
+
+Goal:
+
+    Begining of February:
+
+        - Ensure proper download of repository 
+        - Become familure with BlueRov (if not already)
+        - Become familure with source/src code for path planner and pid, and the pid implimentation file found in lib/pid/ros_pid.cpp
+        - Ensure communication between all nodes
+    
+    End of February:
+
+        - Begin tuning of PID controller
+
+Advice:
+
+    Before diving into actual testing I would confirm that all communication is properly working, and breifly look over the code.
+    
+    I structured it to were you should only have to work out of the source file found in src.  However, the only thing that has not been run 
+    and may contain issues is the pid header file I created.  Any beleived errors within the path planner should be noted in the Notes.txt file
+    for the day. 
+
+    All pid tuning parameters are currently set to 1.  These can be found in the controller_node source file.
+
+    When conducting the first expiraments I would begin with only setting 1 DOF at a time.
+        This can be done in the pp_node source file. i.e. all final positons are 0 besides 1 of them.
+
+    Before you continue to the pid controll, plot the trajectory you will following first to make sure that is was computed correctly.
+
+    I would define 0 objects for the whole month of february.
+
+    Expect there to be problems and to be patient.  
+    There is a path planning algorithm that is running that has never seen light of day before.
+    I am excited to have you guys working with me through this, and hope that their can be some form of learning while we work together. 
+    There is an object detection system that I will be building ontop of the system I currently have inplace.  If any of you are interested in helping in 
+    the development of that I would be happy to have you on board. 
+
+    My cell is 337.321.0557 feel free to call any time of day. Remember I am 2 hours behind you guys so be easy on the mornings.

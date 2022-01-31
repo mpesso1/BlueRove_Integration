@@ -67,7 +67,6 @@ root::MeanTraj::MeanTraj(int DOF, int num_of_steps, int ocv) {
 // Prior ----
 
 root::MeanTraj::~MeanTraj(){ 
-    //std::cout << "DOF ENDED" << std::endl;
 } // Define destructor in cpp
 
 void root::MeanTraj::add_DOF(float a, float v0, float p0, float pf, int idx, bool ocv) {
@@ -85,7 +84,6 @@ void root::MeanTraj::add_DOF(float a, float v0, float p0, float pf, int idx, boo
     else {
         float tplus = (-v0 + sqrt(pow(v0,2)-4*(a/2)*(p0-pf)))/a;
         float tminus = (-v0 - sqrt(pow(v0,2)-4*(a/2)*(p0-pf)))/a;
-        //std::cout << tplus << " " << tminus << std::endl;
         if (tplus > tminus) {
             final_times.push_back(abs(tplus));
         }
@@ -148,8 +146,6 @@ void root::MeanTraj::define_states() {
         add+=step;
         i+=1;
     }
-    //std::cout << mean_state << std::endl;
-    //std::cout << " " << std::endl;
 }
 
 void root::MeanTraj::define_B() {
@@ -209,7 +205,6 @@ void root::MeanTraj::declare_optimization() { // Need to get rid of this step...
         }    
     }
     check_pos = final_pos;
-    //std::cout << J << std::endl;
 }
 
 void root::MeanTraj::update_optimizaion() {
@@ -232,14 +227,13 @@ void root::MeanTraj::update_optimizaion() {
     check_pos = final_pos;
 
     update_g();
-    //std::cout << mag_ocv << std::endl;
 
 }
 
 void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,std::vector<float> obj_z) {
     obs.resize(obj_x.size(),ocv_size);
     if (obj_x.size() != obj_y.size() || obj_x.size() != obj_z.size()) {
-        //std::cout << "Error with computing or storing position of obsticals. Trajectory failed" << std::endl;
+        std::cout << "Error with computing or storing position of obsticals. Trajectory failed" << std::endl;
         exit(1);
     }
     for (int z=0; z<obj_x.size(); z++) {
@@ -247,7 +241,6 @@ void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,
         obs(z,1) = obj_y[z];
         obs(z,2) = obj_z[z];
     }
-    //std::cout << obs << std::endl;
     update_g();
 
 
@@ -258,9 +251,9 @@ void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,
         //if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
         //  std::cout << final_pos.transpose() << std::endl;
         //}
-        std::cout << i << std::endl;
+        //std::cout << i << std::endl;
         if (final_pos.isApprox(check_pos)) {
-            std::cout << "Path converged\n";
+            //std::cout << "Path converged\n";
             break;
         }
         update_optimizaion();

@@ -22,21 +22,18 @@ void pp_callback(const geometry_msgs::Pose& ds) {
 */
 
 
-// ----  PID Gains -------------------------
+// ----  PID Gains Initialized -------------------------
 Eigen::Matrix<float,1,6> pose_gain;
 Eigen::Matrix<float,1,6> inte_gain;
 Eigen::Matrix<float,1,6> deriv_gain;
+// ----- States Initialized ----------------------------
+Eigen::Matrix<float,6,1> desired; // from path planner
+Eigen::Matrix<float,6,1> current; // from bluerov
+Eigen::Matrix<float,6,1> velo; // velocity
 // -----------------------------------------
 
 
-// ----- States ----------------------------
-Eigen::Matrix<float,6,1> desired;
-Eigen::Matrix<float,6,1> current;
-Eigen::Matrix<float,6,1> velo;
-// -----------------------------------------
-
-
-void odom_callback(const nav_msgs::Odometry& cs) {
+void odom_callback(const nav_msgs::Odometry& cs) { // cs := current state from bluerov
     current(0) = cs.pose.pose.position.x;
     current(1) = cs.pose.pose.position.y;
     current(2) = cs.pose.pose.position.z;
@@ -59,14 +56,14 @@ int main(int argc, char** argv) {
 
     ros::init(argc,argv,"Controller");
     ros::NodeHandle n;
-    ros::Rate loop_rate(10); // communication frequency
+    ros::Rate loop_rate(10); // communication frequency [hz]
     
     // x, y, z, thx, thy, thz
     pose_gain << 1, 1, 1, 1, 1, 1;
     inte_gain << 1, 1, 1, 1, 1, 1;
     deriv_gain << 1, 1, 1, 1, 1, 1;
 
-    // ------------------------ Publishing Topics ------------------> To: Robot <--------------------
+    // ------------------------ Publishing TOPICS ------------------> To: Robot <--------------------
     ros::Publisher pitch = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel1/set_pwn",1000);
     ros::Publisher roll = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel2/set_pwn",1000);
     ros::Publisher z = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel3/set_pwn",1000);
@@ -76,7 +73,7 @@ int main(int argc, char** argv) {
     // ----------------------------------------------------------------------------------------------
 
 
-    // ------------------------ Subscribing Topics ----------------> From: Path Planner, Odometry <-- {respectivly}
+    // ------------------------ Subscribing TOPICS ----------------> From: Path Planner, Odometry <-- {respectivly}
     //ros::Subscriber pp = n.subscribe("waypoint",1000,pp_callback); // geometry_msgs/Pose ***** Server Used Instead *****
     ros::Subscriber odom = n.subscribe("/BlueRov2/odometry",1000,odom_callback); // nav_msgs/Odometry
     // ----------------------------------------------------------------------------------------------
@@ -103,7 +100,7 @@ int main(int argc, char** argv) {
     waypoint.request.thy_vel = velo(4);
     waypoint.request.thz_vel = velo(5);
 
-    if (client1.call(waypoint)) {
+    if (client1.call(waypoint)) { // call from path planer
         desired(0) = waypoint.response.x_way;
         desired(1) = waypoint.response.y_way;
         desired(2) = waypoint.response.z_way;
@@ -121,8 +118,8 @@ int main(int argc, char** argv) {
 
     // ------------------------ PID controller Object -----------------------------------------------
     pid::rosPID controller(6, pose_gain, inte_gain, deriv_gain);
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now(); // Should be able to comment these two lines out but they were here before so leave them.
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now(); // ^
     // ----------------------------------------------------------------------------------------------
 
 
@@ -139,6 +136,29 @@ int main(int argc, char** argv) {
 
         controller.run_pid(td,desired,current); //************ do not have desired or current yet..
         
+        // send output from PID to BlueRov
+        std_msgs::UInt16 x_contoller_output;
+        std_msgs::UInt16 y_contoller_output;
+        std_msgs::UInt16 z_contoller_output;
+        std_msgs::UInt16 thx_contoller_output;
+        std_msgs::UInt16 thy_contoller_output;
+        std_msgs::UInt16 thz_contoller_output;
+
+        x_contoller_output.data = controller.controller_output(0);
+        y_contoller_output.data = controller.controller_output(1);
+        z_contoller_output.data = controller.controller_output(2);
+        thx_contoller_output.data = controller.controller_output(3);
+        thy_contoller_output.data = controller.controller_output(4);
+        thz_contoller_output.data = controller.controller_output(5);
+
+        x.publish(x_contoller_output);
+        y.publish(y_contoller_output);
+        z.publish(z_contoller_output);
+        roll.publish(thx_contoller_output);
+        pitch.publish(thy_contoller_output);
+        yaw.publish(thz_contoller_output);
+
+
         if (current.isApprox(desired,TOLERANCE)) {
             waypoint.request.x = current(0);
             waypoint.request.y = current(1);
@@ -155,6 +175,28 @@ int main(int argc, char** argv) {
                 desired(4) = waypoint.response.thy_way;
                 desired(5) = waypoint.response.thz_way;
             }
+        }
+        else { // send output from PID to BlueRov *** If you do not want any output to the bluerov then comment this out *** 
+            std_msgs::UInt16 x_contoller_output;
+            std_msgs::UInt16 y_contoller_output;
+            std_msgs::UInt16 z_contoller_output;
+            std_msgs::UInt16 thx_contoller_output;
+            std_msgs::UInt16 thy_contoller_output;
+            std_msgs::UInt16 thz_contoller_output;
+
+            x_contoller_output.data = controller.controller_output(0);
+            y_contoller_output.data = controller.controller_output(1);
+            z_contoller_output.data = controller.controller_output(2);
+            thx_contoller_output.data = controller.controller_output(3);
+            thy_contoller_output.data = controller.controller_output(4);
+            thz_contoller_output.data = controller.controller_output(5);
+
+            x.publish(x_contoller_output);
+            y.publish(y_contoller_output);
+            z.publish(z_contoller_output);
+            roll.publish(thx_contoller_output);
+            pitch.publish(thy_contoller_output);
+            yaw.publish(thz_contoller_output);
         }
 
         ros::spinOnce();

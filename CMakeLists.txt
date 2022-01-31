@@ -32,13 +32,18 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
+# pid_lib
 add_library(pid_lib lib/pid/ros_pid.cpp lib/pid/ros_pid.h)
 target_include_directories(pid_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/pid")
 
+# pp_lib
 add_library(pp_lib lib/Path_Planner/goPath.cpp lib/Path_Planner/goPath.h)
 target_include_directories(pp_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/Path_Planner")
 
+# pp_node
 add_executable(pp_node src/Path_Planner/pp_goPath.cpp)
+
+# Controller_node
 add_executable(Controller_node src/pid/pp_pid.cpp)
 #add_executable(tester_node src/test_subscriber.cpp)
 

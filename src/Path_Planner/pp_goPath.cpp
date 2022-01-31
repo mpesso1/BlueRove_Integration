@@ -57,6 +57,7 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
 
 
         BlueRov.optimize(objx,objy,objz); 
+        BlueRov.traj(1);
         path_trans = BlueRov.trajectory_translational();
         //path_angular = BlueRov.trajectory_angular();
         NEW_TRAJ = false;
