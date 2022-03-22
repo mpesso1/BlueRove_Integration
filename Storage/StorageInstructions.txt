@@ -33,4 +33,4 @@ PLOTTING DATA
 
     In order to sync the script with the file containing data simply define the data and file name in the two variable at the begining of the script.
 
-    Look at comments at begining of script on possible errors
+    Look at comments at begining of script osn possible errors

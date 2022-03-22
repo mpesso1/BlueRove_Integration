@@ -8,209 +8,233 @@
 #include "nav_msgs/Odometry.h"
 #include "blue_rov_custom_integration/update_waypoint.h"
 
-// GLOBAL VARIABLES --------------------
+
+// ENUM DEFINING DEGREES OF FREEDOM -------------------
+enum Cordinates {X, Y, Z, THX, THY, THZ}; // Position
+enum Velocity {X_VEL, Y_VEL, Z_VEL, X_THVEL, Y_THVEL, Z_THVEL}; // Velocity
+// ----------------------------------------------------
+
+
+// GLOBAL VARIABLES / CONTROL VARIABLES ---------------
 const int DOF = 6; // Degrees of Freedom
-int COUNT = 0; // couting variable used in script, only needed for first iteration
-const float TOLERANCE = .0001; // defines how close the desired and current states need to be to one another
-float td; // "time difference" defined by chrono library
-// -------------------------------------
-
-/*  ***** Server Used Instead *****
-void pp_callback(const geometry_msgs::Pose& ds) {
-    std::cout << "Hey" << std::endl;
-}
-*/
+const float TOLERANCE = .0001; // defines how close the desired_pose and current_pose states need to be to one another
+float dt; // "time difference" defined by chrono library
+// ----------------------------------------------------
 
 
-// ----  PID Gains Initialized -------------------------
+// PID Gains Initialized ------------------------------
 Eigen::Matrix<float,1,6> pose_gain;
 Eigen::Matrix<float,1,6> inte_gain;
 Eigen::Matrix<float,1,6> deriv_gain;
+// ----------------------------------------------------
+
+
 // ----- States Initialized ----------------------------
-Eigen::Matrix<float,6,1> desired; // from path planner
-Eigen::Matrix<float,6,1> current; // from bluerov
-Eigen::Matrix<float,6,1> velo; // velocity
-// -----------------------------------------
+Eigen::Matrix<float,6,1> desired_pose; // from path planner
+Eigen::Matrix<float,6,1> current_pose; // from bluerov
+Eigen::Matrix<float,6,1> current_velo; // current_velocity
+// -----------------------------------------------------
 
 
-void odom_callback(const nav_msgs::Odometry& cs) { // cs := current state from bluerov
-    current(0) = cs.pose.pose.position.x;
-    current(1) = cs.pose.pose.position.y;
-    current(2) = cs.pose.pose.position.z;
-    Eigen::Quaternionf q(cs.pose.pose.orientation.w, cs.pose.pose.orientation.x, cs.pose.pose.orientation.y, cs.pose.pose.orientation.z);
-    auto euler = q.toRotationMatrix().eulerAngles(0, 1, 2);
-    current(3) = euler(0);
-    current(4) = euler(1);
-    current(5) = euler(2);
-
-    velo(0) = cs.twist.twist.linear.x;
-    velo(1) = cs.twist.twist.linear.y;
-    velo(2) = cs.twist.twist.linear.z;
-    velo(3) = cs.twist.twist.angular.x;
-    velo(4) = cs.twist.twist.angular.y;
-    velo(5) = cs.twist.twist.angular.z;
-}
+// Odometry Callback -----------------------------------
+/* Callback function used to get odometry data coming from bluerov.  Defined under main. */
+void odom_callback(const nav_msgs::Odometry& cs);
+// -----------------------------------------------------
 
 
+// ** MAIN ** ------------------------------------------ *********
 int main(int argc, char** argv) {
 
     ros::init(argc,argv,"Controller");
     ros::NodeHandle n;
     ros::Rate loop_rate(10); // communication frequency [hz]
-    
-    // x, y, z, thx, thy, thz
-    pose_gain << 1, 1, 1, 1, 1, 1;
-    inte_gain << 1, 1, 1, 1, 1, 1;
-    deriv_gain << 1, 1, 1, 1, 1, 1;
 
-    // ------------------------ Publishing TOPICS ------------------> To: Robot <--------------------
+    // Publishing TOPICS -----------------> To: Robot <----------------------
     ros::Publisher pitch = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel1/set_pwn",1000);
     ros::Publisher roll = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel2/set_pwn",1000);
     ros::Publisher z = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel3/set_pwn",1000);
     ros::Publisher yaw = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel4/set_pwn",1000);
     ros::Publisher x = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel5/set_pwn",1000);
     ros::Publisher y = n.advertise<std_msgs::UInt16>("/BlueRov2/rc_channel6/set_pwn",1000);
-    // ----------------------------------------------------------------------------------------------
+    // ----------------------------------------------------------------------
 
 
-    // ------------------------ Subscribing TOPICS ----------------> From: Path Planner, Odometry <-- {respectivly}
-    //ros::Subscriber pp = n.subscribe("waypoint",1000,pp_callback); // geometry_msgs/Pose ***** Server Used Instead *****
-    ros::Subscriber odom = n.subscribe("/BlueRov2/odometry",1000,odom_callback); // nav_msgs/Odometry
-    // ----------------------------------------------------------------------------------------------
+    // Subscribing TOPICS -----------------> From: Odometry <-----------------
+    ros::Subscriber odom = n.subscribe("/BlueRov2/odometry",1000,odom_callback); // nav_msgs/Odometry  :  Defines current_* 
+    // ----------------------------------------------------------------------
 
 
-    // ----------------------- Client -----------------------------> Server: Path Planner <----------
-    ros::ServiceClient client1 = n.serviceClient<blue_rov_custom_integration::update_waypoint>("service_line_waypoint");
+    // Client SERVICE ---------------------> Server: Path Planner <-----------
     blue_rov_custom_integration::update_waypoint waypoint;
-    // ----------------------------------------------------------------------------------------------
+    ros::ServiceClient client1 = n.serviceClient<blue_rov_custom_integration::update_waypoint>("service_line_waypoint");
+    // ----------------------------------------------------------------------
 
 
-    // Setup before Loop -----------------------
-    waypoint.request.x = current(0);
-    waypoint.request.y = current(1);
-    waypoint.request.z = current(2);
-    waypoint.request.thx = current(3);
-    waypoint.request.thy = current(4);
-    waypoint.request.thy = current(5);
+    // PID GAIN -- (x, y, z, thx, thy, thz) ---------------------------------
+    pose_gain << .01, .01, .01, .01, .01, .01;
+    inte_gain << .01, .01, .01, .01, .01, .01;
+    deriv_gain << .01, .01, .01, .01, .01, .01;
+    // ----------------------------------------------------------------------
 
-    waypoint.request.x_vel = velo(0);
-    waypoint.request.y_vel = velo(1);
-    waypoint.request.z_vel = velo(2);
-    waypoint.request.thx_vel = velo(3);
-    waypoint.request.thy_vel = velo(4);
-    waypoint.request.thz_vel = velo(5);
 
+    // Initial trajectory setup on startup --------------------------------------------------------------------------------------
+    /* Will be further updated in the bluerov callback function. */
+    /* Should initially all be approximatly zero. */
+    // Request to server ----------------------------------------------------
+    waypoint.request.x = current_pose(X);
+    waypoint.request.y = current_pose(Y);
+    waypoint.request.z = current_pose(Z);
+    waypoint.request.thx = current_pose(THX);
+    waypoint.request.thy = current_pose(THY);
+    waypoint.request.thy = current_pose(THZ);
+    waypoint.request.x_vel = current_velo(X_VEL);
+    waypoint.request.y_vel = current_velo(Y_VEL);
+    waypoint.request.z_vel = current_velo(Z_VEL);
+    waypoint.request.thx_vel = current_velo(X_THVEL);
+    waypoint.request.thy_vel = current_velo(Y_THVEL);
+    waypoint.request.thz_vel = current_velo(Z_THVEL);
+    // ----------------------------------------------------------------------
+
+    // Response from server -------------------------------------------------
     if (client1.call(waypoint)) { // call from path planer
-        desired(0) = waypoint.response.x_way;
-        desired(1) = waypoint.response.y_way;
-        desired(2) = waypoint.response.z_way;
-        desired(3) = waypoint.response.thx_way;
-        desired(4) = waypoint.response.thy_way;
-        desired(5) = waypoint.response.thz_way;
-
+        desired_pose(X) = waypoint.response.x_way;
+        desired_pose(Y) = waypoint.response.y_way;
+        desired_pose(Z) = waypoint.response.z_way;
+        desired_pose(THX) = waypoint.response.thx_way;
+        desired_pose(THY) = waypoint.response.thy_way;
+        desired_pose(THZ) = waypoint.response.thz_way;
     }
     else {
         std::cout << "Waypoint Server Not Responding\n";
         return 1;
     }
-    // -----------------------------------------
+    // ----------------------------------------------------------------------
+    // ----------------------------------------------------------------------------------------------------------------------------
 
 
-    // ------------------------ PID controller Object -----------------------------------------------
-    pid::rosPID controller(6, pose_gain, inte_gain, deriv_gain);
-    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now(); // Should be able to comment these two lines out but they were here before so leave them.
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now(); // ^
-    // ----------------------------------------------------------------------------------------------
+    // PID controller object ------------------------------------------------
+    pid::rosPID controller(DOF, pose_gain, inte_gain, deriv_gain);
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    // ----------------------------------------------------------------------
 
 
-    // Ros loop ----  dt included in loop for controller (chrono library) ----
+    // Output to BlueRov ----------------------------------------------------
+    std_msgs::UInt16 x_contoller_output;
+    std_msgs::UInt16 y_contoller_output;
+    std_msgs::UInt16 z_contoller_output;
+    std_msgs::UInt16 thx_contoller_output;
+    std_msgs::UInt16 thy_contoller_output;
+    std_msgs::UInt16 thz_contoller_output;
+    // ----------------------------------------------------------------------
+
+
+    // ROS loop -------------------------------------------------------------
+    /* dt included in loop for controller (chrono library) */
     while (ros::ok()) {
-        if (COUNT == 0) {
-            td = 0.0;
-        }
-        else {
-            td = std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() *.000000001; // ellapsed time in seconds
-            COUNT = 1;
-        }
+
+        // Time differential per PID step -----------------------------------------------
+        dt= std::chrono::duration_cast<std::chrono::nanoseconds> (end - begin).count() *.000000001; // ellapsed time in seconds
+        // ------------------------------------------------------------------------------
+
+
+        // Begin timmer -----------------------------------------------------------------
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
+        // ------------------------------------------------------------------------------
 
-        controller.run_pid(td,desired,current); //************ do not have desired or current yet..
-        
-        // send output from PID to BlueRov
-        std_msgs::UInt16 x_contoller_output;
-        std_msgs::UInt16 y_contoller_output;
-        std_msgs::UInt16 z_contoller_output;
-        std_msgs::UInt16 thx_contoller_output;
-        std_msgs::UInt16 thy_contoller_output;
-        std_msgs::UInt16 thz_contoller_output;
 
-        x_contoller_output.data = controller.controller_output(0);
-        y_contoller_output.data = controller.controller_output(1);
-        z_contoller_output.data = controller.controller_output(2);
-        thx_contoller_output.data = controller.controller_output(3);
-        thy_contoller_output.data = controller.controller_output(4);
-        thz_contoller_output.data = controller.controller_output(5);
+        // Call PID step ----------------------------------------------------------------
+        controller.run_pid(dt,desired_pose,current_pose);
+        // ------------------------------------------------------------------------------
 
+
+        // Store data to send to BlueRov -------------> From: PID <----------------------
+        x_contoller_output.data = controller.controller_output(X);
+        y_contoller_output.data = controller.controller_output(Y);
+        z_contoller_output.data = controller.controller_output(Z);
+        thx_contoller_output.data = controller.controller_output(THX);
+        thy_contoller_output.data = controller.controller_output(THY);
+        thz_contoller_output.data = controller.controller_output(THZ);
+        // ------------------------------------------------------------------------------
+
+
+        // Publish BlueRov output data ---------------> To: BlueRov <--------------------
         x.publish(x_contoller_output);
         y.publish(y_contoller_output);
         z.publish(z_contoller_output);
         roll.publish(thx_contoller_output);
         pitch.publish(thy_contoller_output);
         yaw.publish(thz_contoller_output);
+        // ------------------------------------------------------------------------------
 
 
-        if (current.isApprox(desired,TOLERANCE)) {
-            waypoint.request.x = current(0);
-            waypoint.request.y = current(1);
-            waypoint.request.z = current(2);
-            waypoint.request.thx = current(3);
-            waypoint.request.thy = current(4);
-            waypoint.request.thy = current(5);
+        // Determine convergence between current and desired ----------------------------
+        // IF CONVERGED -----------------------------------------------------------------
+        if (current_pose.isApprox(desired_pose,TOLERANCE)) {
+
+            // Request to server current pose ----------------------------------------------
+            waypoint.request.x = current_pose(X);
+            waypoint.request.y = current_pose(Y);
+            waypoint.request.z = current_pose(Z);
+            waypoint.request.thx = current_pose(THX);
+            waypoint.request.thy = current_pose(THY);
+            waypoint.request.thy = current_pose(THZ);
+            waypoint.request.x_vel = current_velo(X_VEL);
+            waypoint.request.y_vel = current_velo(Y_VEL);
+            waypoint.request.z_vel = current_velo(Z_VEL);
+            waypoint.request.thx_vel = current_velo(X_THVEL);
+            waypoint.request.thy_vel = current_velo(Y_THVEL);
+            waypoint.request.thz_vel = current_velo(Z_THVEL);
+            // ------------------------------------------------------------------------------
             
+
+            // Response from server ---------------------------------------------------------
             if (client1.call(waypoint)) {
-                desired(0) = waypoint.response.x_way;
-                desired(1) = waypoint.response.y_way;
-                desired(2) = waypoint.response.z_way;
-                desired(3) = waypoint.response.thx_way;
-                desired(4) = waypoint.response.thy_way;
-                desired(5) = waypoint.response.thz_way;
+                desired_pose(X) = waypoint.response.x_way;
+                desired_pose(Y) = waypoint.response.y_way;
+                desired_pose(Z) = waypoint.response.z_way;
+                desired_pose(THX) = waypoint.response.thx_way;
+                desired_pose(THY) = waypoint.response.thy_way;
+                desired_pose(THZ) = waypoint.response.thz_way;
             }
+            else {
+                std::cout << "Waypoint Server Not Responding\n";
+                return 1;
+            }
+            // ------------------------------------------------------------------------------
         }
-        else { // send output from PID to BlueRov *** If you do not want any output to the bluerov then comment this out *** 
-            std_msgs::UInt16 x_contoller_output;
-            std_msgs::UInt16 y_contoller_output;
-            std_msgs::UInt16 z_contoller_output;
-            std_msgs::UInt16 thx_contoller_output;
-            std_msgs::UInt16 thy_contoller_output;
-            std_msgs::UInt16 thz_contoller_output;
-
-            x_contoller_output.data = controller.controller_output(0);
-            y_contoller_output.data = controller.controller_output(1);
-            z_contoller_output.data = controller.controller_output(2);
-            thx_contoller_output.data = controller.controller_output(3);
-            thy_contoller_output.data = controller.controller_output(4);
-            thz_contoller_output.data = controller.controller_output(5);
-
-            x.publish(x_contoller_output);
-            y.publish(y_contoller_output);
-            z.publish(z_contoller_output);
-            roll.publish(thx_contoller_output);
-            pitch.publish(thy_contoller_output);
-            yaw.publish(thz_contoller_output);
-        }
+        // -------------------------------------------------------------------------------
 
         ros::spinOnce();
-
         loop_rate.sleep();
 
-        COUNT = 1;
 
+        // End timmer -------------------------------------------------------------------
         std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+        // ------------------------------------------------------------------------------
     }
 
     return 0;
 }
 
+// Odometry callback function
+void odom_callback(const nav_msgs::Odometry& cs) { // cs := current_pose state from bluerov
+    current_pose(X) = cs.pose.pose.position.x;
+    current_pose(Y) = cs.pose.pose.position.y;
+    current_pose(Z) = cs.pose.pose.position.z;
+    Eigen::Quaternionf q(cs.pose.pose.orientation.w, cs.pose.pose.orientation.x, cs.pose.pose.orientation.y, cs.pose.pose.orientation.z);
+    auto euler = q.toRotationMatrix().eulerAngles(X, Y, Z);
+    current_pose(THX) = euler(0);
+    current_pose(THY) = euler(1);
+    current_pose(THZ) = euler(2);
+
+    current_velo(X_VEL) = cs.twist.twist.linear.x;
+    current_velo(Y_VEL) = cs.twist.twist.linear.y;
+    current_velo(Z_VEL) = cs.twist.twist.linear.z;
+    current_velo(X_THVEL) = cs.twist.twist.angular.x;
+    current_velo(Y_THVEL) = cs.twist.twist.angular.y;
+    current_velo(Z_THVEL) = cs.twist.twist.angular.z;
+}
 
 
 
