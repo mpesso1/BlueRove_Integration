@@ -5,12 +5,12 @@
 #include "ros/ros.h"
 #include <geometry_msgs/Pose.h>
 #include "blue_rov_custom_integration/update_waypoint.h"
-//access token == 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
 
 
 using namespace std;
 using namespace root;
 
+void add_object_xyz(float x, float y, float z);
 
 // ENUM DEFINING DEGREES OF FREEDOM -------------------
 enum Cordinates {X, Y, Z, THX, THY, THZ}; // Position
@@ -70,11 +70,11 @@ int main(int argc,char** argv) {
     // ---------------------------------------------------------------------
 
     // Pseudo objects cordinates
-    //add_object_xyz(2.59,2.86,3.31);
-    //add_object_xyz(3.75,5.46,8.68);
-    //add_object_xyz(2.2,3.8,6.5);
-    //add_object_xyz(3.0,4.0,7.0);
-    //add_object_xyz(4.024,4.71,6.27);
+    add_object_xyz(2.59,2.86,3.31);
+    add_object_xyz(3.75,5.46,8.68);
+    add_object_xyz(2.2,3.8,6.5);
+    add_object_xyz(3.0,4.0,7.0);
+    add_object_xyz(4.024,4.71,6.27);
     // ---------------------------------------------------------------------
 
     // Server SERVICE -------------------------------------------------------
@@ -101,12 +101,22 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
     // Initial trajectory action -----------------------------------------------------------------
     if (NEW_TRAJ) {
         // Initialize prior trajectories ----------------------
-        BlueRov.add_DOF(MAX_ACCEL, req.x_vel, req.x, 4., 0, true); // acceleration, init velocity, init poition, final position, indx (used for algorithm), boolian defining ocv
+        /* acceleration, init velocity, init poition, final position, indx (used for algorithm), boolian defining ocv */
+
+        /*BlueRov.add_DOF(MAX_ACCEL, req.x_vel, req.x, 4., 0, true); 
         BlueRov.add_DOF(MAX_ACCEL, req.y_vel, req.y, 7., 1, true); 
         BlueRov.add_DOF(MAX_ACCEL, req.z_vel, req.z, 12., 2, true);
         BlueRov.add_DOF(MAX_ACCEL, req.thx_vel, req.thx, 4., 3, false);
         BlueRov.add_DOF(MAX_ACCEL, req.thy_vel, req.thy, 4., 4, false);
-        BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, 5., 5, false);
+        BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, 5., 5, false);*/
+
+        //::::: TESTING
+        BlueRov.add_DOF(MAX_ACCEL, 2, 0, 5, 0, true); 
+        BlueRov.add_DOF(-MAX_ACCEL, 2, 0, 5, 1, true); 
+        BlueRov.add_DOF(-MAX_ACCEL, 2, 0, 10, 2, true);
+        BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 3, false);
+        BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 4, false);
+        BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 5, false);
         // ----------------------------------------------------
 
 

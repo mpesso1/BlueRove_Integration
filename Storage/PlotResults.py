@@ -15,12 +15,12 @@ import numpy as np
 
 
 # Month/Day
-date = "1/31/"
+date = "3/22/"
 
 # path file
-path = "path1.txt"
+path = "/path1.txt"
 
-data = np.loadtxt("/home/mason/catkin_ws/src/blue_rov_custom_integration/Storage/" + date + "Paths/" + path,dtype=float)
+data = np.loadtxt("/home/mason/catkin_ws/src/blue_rov_custom_integration/Storage/" + date + path,dtype=float)
 
 
 def traj(): # function for plotting out multiple trajectories and objects from shell.

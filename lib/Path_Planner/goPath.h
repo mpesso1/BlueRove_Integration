@@ -1,5 +1,5 @@
-#ifndef GOPATH_H
-#define GOPATH_H
+#ifndef GPMP_H
+#define GPMP_H
 #include <Eigen/Dense>
 #include <vector>
 #include <iostream>
@@ -11,20 +11,18 @@ namespace root {
 
             // -- Prior Variables
 
-            std::vector<float> final_times; // final times calculated for each DOF -- indexed based off of the order each DOF is initialized
+            std::vector<float> final_time; // final times calculated for each DOF -- indexed based off of the order each DOF is initialized
 
             Eigen::Matrix<float,1,Eigen::Dynamic> state_time; // time at each step taken  //-- specified by max time calculated and the amount of steps specified
 
             int DsOF; // counts the number of DOF that the system pocesses
 
-            float root_time = 0; // largest time calculated from the inputs of each DOF --> Used to set the size of each DOF mean vector and kernal
+            float max_time = 0; // largest time calculated from the inputs of each DOF --> Used to set the size of each DOF mean vector and kernal
 
-            Eigen::Matrix<float,4,Eigen::Dynamic> init_parameters; // matrix that stores all the initial paramiters that define the prior
+            Eigen::Matrix<float,4,Eigen::Dynamic> init_parameter; // matrix that stores all the initial paramiters that define the prior
 
             int steps; // defines how many steps there are total between initial and final positions -- including the defined starting and final positions
             
-            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> mean_state; // Stores the mean of the position and the velocity at each given step for each DOF
-
             float step; // tf / steps --> t0 is always = 0
 
             Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> B; // Matrix specific to prior algorithm
@@ -90,6 +88,8 @@ namespace root {
 
 
         public:
+            enum INPUTS {ACCEL,V0,P0,Pf};
+
             MeanTraj(int,int,int); 
             // Constructor, allocates space in memory for class
 
@@ -145,17 +145,12 @@ namespace root {
             void update_J(int); // the int will define the index of which state we are at
             // since there is no matrix dot product in cpp I will use this function to swap values for the Jacobian
 
-            void update_g();
+            void update_g(float radius, float scale_error);
             // checks for obsticals at each state and computes obsticle gradient
 
             void update_optimizaion();
             // function that updates variables used within update rule... as states change
-
-            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> trajectory_translational();
-
-            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> trajectory_angular();
-
     
     };
 }
-#endif // GOPATH_H
+#endif // GPMP_H

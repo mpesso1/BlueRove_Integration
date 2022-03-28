@@ -1,0 +1,71 @@
+... logging to /home/mason/.ros/log/86316f12-a9ed-11ec-99d7-68545a4ea872/roslaunch-mason-Nitro-AN517-52-21566.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/mason/catkin_ws/src/blue_rov_custom_integration/launch/launch.launch
+[1mstarted roslaunch server http://mason-Nitro-AN517-52:33047/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /rosdistro: melodic
+ * /rosversion: 1.14.12
+
+NODES
+  /
+    Controller (blue_rov_custom_integration/Controller_node)
+    Path_Planner (blue_rov_custom_integration/pp_node)
+
+auto-starting new master
+[1mprocess[master]: started with pid [21583][0m
+[1mROS_MASTER_URI=http://localhost:11311[0m
+]2;/home/mason/catkin_ws/src/blue_rov_custom_integration/launch/launch.launch http://localhost:11311
+[1msetting /run_id to 86316f12-a9ed-11ec-99d7-68545a4ea872[0m
+[1mprocess[rosout-1]: started with pid [21601][0m
+started core service [/rosout]
+[1mprocess[Path_Planner-2]: started with pid [21604][0m
+[1mprocess[Controller-3]: started with pid [21609][0m
+[Controller-3] killing on exit
+[Path_Planner-2] killing on exit
+[rosout-1] killing on exit
+[master] killing on exit
+shutting down processing monitor...
+... shutting down processing monitor complete
+[1mdone[0m
+... logging to /home/mason/.ros/log/52a4cfac-a9f4-11ec-99d7-68545a4ea872/roslaunch-mason-Nitro-AN517-52-27747.log
+Checking log directory for disk usage. This may take a while.
+Press Ctrl-C to interrupt
+Done checking log file disk usage. Usage is <1GB.
+]2;/home/mason/catkin_ws/src/blue_rov_custom_integration/launch/launch.launch
+[1mstarted roslaunch server http://mason-Nitro-AN517-52:42243/[0m
+
+SUMMARY
+========
+
+PARAMETERS
+ * /rosdistro: melodic
+ * /rosversion: 1.14.12
+
+NODES
+  /
+    Controller (blue_rov_custom_integration/Controller_node)
+    Path_Planner (blue_rov_custom_integration/pp_node)
+
+auto-starting new master
+[1mprocess[master]: started with pid [27764][0m
+[1mROS_MASTER_URI=http://localhost:11311[0m
+]2;/home/mason/catkin_ws/src/blue_rov_custom_integration/launch/launch.launch http://localhost:11311
+[1msetting /run_id to 52a4cfac-a9f4-11ec-99d7-68545a4ea872[0m
+[1mprocess[rosout-1]: started with pid [27782][0m
+started core service [/rosout]
+[1mprocess[Path_Planner-2]: started with pid [27785][0m
+[1mprocess[Controller-3]: started with pid [27790][0m
+[1m[Path_Planner-2] process has finished cleanly
+log file: /home/mason/.ros/log/52a4cfac-a9f4-11ec-99d7-68545a4ea872/Path_Planner-2*.log[0m
+[Controller-3] killing on exit
+[rosout-1] killing on exit
+[master] killing on exit
+shutting down processing monitor...
+... shutting down processing monitor complete
+[1mdone[0m
