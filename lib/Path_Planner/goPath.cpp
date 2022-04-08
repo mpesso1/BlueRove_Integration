@@ -1,7 +1,7 @@
 #include <iostream>
 #include <Eigen/Dense>
 #include <vector>
-#include "gpmp.h"
+#include "goPath.h"
 #include <math.h>
 
 // Override Constructor ------------------------------------------------
@@ -453,3 +453,13 @@ void root::MeanTraj::get_something() {
 // --------------------------------------------------------------------
 
 
+
+
+
+Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> root::MeanTraj::trajectory_translational() {
+    return final_pos;
+}
+
+Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> root::MeanTraj::trajectory_angular() {
+    return mean_pos;
+}
