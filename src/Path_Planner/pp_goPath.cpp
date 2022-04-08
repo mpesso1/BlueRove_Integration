@@ -1,3 +1,9 @@
+/*
+ICORE LSU MECS
+DATE:  APRIL 6th, 2022
+AUTHOR: MASON PESSON
+*/
+
 #include "goPath.h"
 #include <Eigen/Dense>
 #include <iostream>

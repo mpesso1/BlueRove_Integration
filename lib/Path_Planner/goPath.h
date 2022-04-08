@@ -1,3 +1,9 @@
+/*
+ICORE LSU MECS
+DATE:  APRIL 6th, 2022
+AUTHOR: MASON PESSON
+*/
+
 #ifndef GPMP_H
 #define GPMP_H
 #include <Eigen/Dense>
