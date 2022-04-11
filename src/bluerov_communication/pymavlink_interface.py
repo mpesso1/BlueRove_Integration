@@ -4,6 +4,7 @@ DATE:  APRIL 6th, 2022
 AUTHOR: MASON PESSON
 """
 
+from doctest import master #??
 from pymavlink import mavutil,mavwp
 import time
 import sys
@@ -76,6 +77,8 @@ class ROVMAV(object):
 
         self.boot_time = time.time()
 
+        wp = mavwp.MAVWPLoader()
+
 
     def acknowledge_command(self):
         """
@@ -88,7 +91,7 @@ class ROVMAV(object):
         print(mavutil.mavlink.enums['MAV_RESULT'][ack_msg['result']].description)
 
 
-    def view_message_loop(self,msg=None,forthismanyiterations=0,atthisrate=0):
+    def view_message_loop(self,msg=None,forthismanyiterations=0,atthisrate=0,stopafterone=False,returndata=False):
         """
         VIEW MESSAGES   NOTE: will loop
             By default a server communicating on a Mavlink channel will broadcast a specific set of mssages.  This fuction will print those messages to the terminal.
@@ -133,13 +136,26 @@ class ROVMAV(object):
                 - Print to terminal MAVLINK messages being 
                 - tp
         """
+        # Need to check added functionality... added stopafterone to see only the fist message that was sent.  This is for when messages are only expected to be sent one time and the while loop can end
+        # also added return data to return the data gathered so further checks can be made depending on the message chooses.  Also may want to see if instead of using break can just use return
+        output = None
         it = 0
         while True:
-            self.view_message(msg)
+            #self.view_message(msg)
+            try:
+                print(self.master.recv_match(type=msg).to_dict())
+                if stopafterone:
+                    output = self.master.recv_match(type=msg).to_dict()
+                    break
+            except:
+                pass
             time.sleep(atthisrate) # NOTE: This call could lead to delay in gathering data
             it += 1
             if forthismanyiterations == it:
                 break
+        
+        if returndata:
+            return output
 
 
     def view_message(self,msg=None):
@@ -206,7 +222,7 @@ class ROVMAV(object):
                     - used to call view message function so content requested can potentially be printed to the terminal
                 msgid
                     - Enum found in mavlink repository that identifies the message
-                    - NOTE: must be defined as MAVLINK_MSG_ID_{msg}
+                    - NOTE: must be defined as MAVLINK_MSG_ID_{msg} *** 
                 atthisfrequency
                     - define the frequency at which the message should be brodacast at
 
@@ -218,6 +234,22 @@ class ROVMAV(object):
                 0, ) # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.    
         self.acknowledge_command()
         self.view_message(msg)
+
+
+    def get_message_interval(self,msg):
+        """
+        NOTE: msg must be defned as must be defined as MAVLINK_MSG_ID_{message} *** cn be found in minimun.xml
+        """
+        self.master.mav.command_long_send( self.master.target_system, self.master.target_component, mavutil.mavlink.MAV_CMD_GET_MESSAGE_INTERVAL, 0,
+                msg, # The MAVLink message ID
+                0, # The interval between two messages in microseconds. Set to -1 to disable and 0 to request default rate.
+                0, 0, 0, 0, # Unused parameters
+                0, ) # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.    
+        self.acknowledge_command()
+
+        # response should be found in a MESSAGE_INTERVAL message
+        self.view_message_loop('MESSAGE_INTERVAL',stopafterone=True)
+
 
     def arm_rov(self):
         """
@@ -293,11 +325,17 @@ class ROVMAV(object):
                 self.master.target_system, self.master.target_component,
                 mavutil.mavlink.MAV_CMD_DO_SET_MODE, 0, mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, mode_id, 0, 0, 0, 0, 0)
             """
+
+            """
             self.master.mav.set_mode_send(
                 self.master.target_system,
                 mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
                 mode_id)
-            
+            """
+
+            # try different way of setting guided mode: MASON
+            mavutil.mavfile.set_mode(self.master,'GUIDED',0,0)
+
             # Wait for ACK command
             self.acknowledge_command()
 
@@ -305,6 +343,44 @@ class ROVMAV(object):
         else:
             print('Unknown mode : {}'.format(mode))
             print('Try:', list(self.master.mode_mapping().keys()))
+
+    
+    def enable_guided_mode(self):
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
+        mavutil.mavlink.MAV_CMD_NAV_GUIDED_ENABLE,
+        0, # may want to try changing this value to 1... do not dig into why
+        1, # 1 := Enable , 0 := Disable
+        0,
+        0,
+        0,
+        0,
+        0,
+        0)
+
+    def set_guided_master(self):
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
+            mavutil.mavlink.MAV_CMD_DO_GUIDED_MASTER,
+            0,
+            self.master.target_system,
+            self.master.target_component,
+            0,
+            0,
+            0,
+            0,
+            0)
+
+
+    def set_guided_limits(self):
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
+            mavutil.mavlink.MAV_CMD_DO_GUIDED_LIMITS,
+            0,
+            1.5, # timeout in seconds
+            0, # min altitude --> 0 means no min altitude
+            0, # max altitude --> 0 means no max altitue
+            0, # horizontal limit --> 0 means not horizontal limit
+            0,
+            0,
+            0)
 
 
     def request_parameters_list(self, paramid=None):
@@ -385,12 +461,6 @@ class ROVMAV(object):
                     self.master.mav.send(wp.wp(msg.seq))                                                                      
                     print( 'Sending waypoint {0}'.format(msg.seq))                                                  
 
-    ##
-    def send_command_long(self):
-        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,mavutil.mavlink.MAV_CMD_NAV_PATHPLANNING,0, 0, 0, 0, 1, 1, 1, 1)
-
-        self.acknowledge_command()
-
     
     def set_rc_channel_pwm(self,channel_id, pwm=1500):
         """ 
@@ -419,8 +489,12 @@ class ROVMAV(object):
 
     
     def manual_control_loop(self):
+        """
+        Control loop used to maualy control bluerov 
+        """
         while True:
             self.keyboard_controlls()
+
 
 # Need to make it act as a stream.. or take into account each case... use switch statements
     def keyboard_controlls(self):
@@ -428,45 +502,47 @@ class ROVMAV(object):
         KEYBOARD TO THRUST MAPPING
             Mapping:
                 (w s) --> longitudinal movement (x)
-                (d a) --> lateral movement (y)
+                (d a) --> yaw movement (omega z)
 
                 (l .) --> vertical movement (z)
-                (, /) --> yaw movement (omega z)
+                (, /) --> lateral movement (y)
         """
         thruster_power = 55
         thruster_nominal = 1500
 
-        if keyboard.read_key() == "w":
-            self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power)
-        elif keyboard.read_key() == "s":
-            self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power*-1)
-        else:
-            print('working')
-            self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal)
-            
-        if not keyboard.is_pressed('q'):
-            print("hey")
+        if keyboard.is_pressed("space"):
 
-        if keyboard.read_key() == "d":
-            self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power)
-        elif keyboard.read_key() == "a":
-            self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power*-1)
-        else:
-            self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal)
+            if keyboard.is_pressed("w"):
+                self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power)
+            elif keyboard.is_pressed("s"):
+                self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power*-1)
+            else:
+                self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal)
+                
+            if keyboard.is_pressed("d"):
+                self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power)
+            elif keyboard.is_pressed("a"):
+                self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power*-1)
+            else:
+                self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal)
+                
 
-        if keyboard.read_key() == "l":
-            self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power)
-        elif keyboard.read_key() == ".":
-            self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power*-1)
-        else:
-            self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal)
+            if keyboard.is_pressed("l"):
+                self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power)
+            elif keyboard.is_pressed("."):
+                self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power*-1)
+            else:
+                self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal)
+                
 
-        if keyboard.read_key() == ",":
-            self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+thruster_power)
-        elif keyboard.read_key() == "/":
-            self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+thruster_power*-1)
-        else:
-            self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal)
+            if keyboard.is_pressed(","):
+                self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+thruster_power)
+            elif keyboard.is_pressed("/"):
+                self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+thruster_power*-1)
+            else:
+                self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal)
+                
+
         
 
     def set_target_attitude(self,roll, pitch, yaw):
@@ -552,23 +628,315 @@ class ROVMAV(object):
                 mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE
             ), x=0,y=0,z=depth,vx=0,vy=0,vz=0,afx=0,afy=0,afz=0,yaw=0,yaw_rate=0
         )
+    """
+    Below are functions needed in order to execute the mission protocal outlined in:
+    https://mavlink.io/en/services/mission.html#mission_types
+    """
 
-    def mission_count(self):
-        self.master.mav.mission_count_send(self.master.target_system, self.master.target_component,1)
-        #
-        self.view_message_loop('MISSION_ACK')
+    # first a the number of waypoints included in the mission must be defined and sent to the autopilot
+    # NOTE: 3 different ways of calling the function are listed. Only execute one at a time when testing
+    def mission_count(self,seq):
+        """
+        NOT currently being used instead using function already define in mavutil
+        """
+        # 1.)
+        # mavlink10 call
+        self.master.mav.mission_count_send(self.master.target_system, self.master.target_component,seq)
+
+        # 2.)
+        # extension off of message definition (sets the mission type... may be needed so try even if teh original works)
+        #self.master.mav.mission_count_send(self.master.target_system, self.master.target_component,1,mavutil.mavlink.MAV_MISSION_TYPE_MISSION)
+
+        # 3.)
+        # not mavlink10
+        #self.master.mav.waypoint_count_send(self.master.target_system, self.master.target_component, seq)
+
+        # 4.) 
+        # using mavutil library
+        #self.master.mav.waypoint_count_send((self.master.target_system, self.master.target_component,seq)
+
+        message_request_data = self.view_message_loop('MISSION_REQUEST_INT',stopafterone=True,returndata=True)
         # self.acknowledge_command()
+
+    """
+    Format for saving missions in txt files
+    QGC WPL <VERSION>
+    <INDEX> <CURRENT WP> <COORD FRAME> <COMMAND> <PARAM1> <PARAM2> <PARAM3> <PARAM4> <PARAM5/X/LATITUDE> <PARAM6/Y/LONGITUDE> <PARAM7/Z/ALTITUDE> <AUTOCONTINUE>
+    """
+
+    def set_home_position(self,lat,long,altitude,startatcurrent=False):
+        #print('--- ', self.master.target_system, ',', self.master.target_component)
+        if not startatcurrent:
+            self.master.mav.command_long_send(self.master.target_system, self.master.target_component,
+            mavutil.mavlink.MAV_CMD_DO_SET_HOME,
+            1, # set position
+            0, # param1 # if this value is set to 1 then it should use the current position!
+            0, # param2
+            0, # param3
+            0, # param4
+            lat, # lat
+            long, # lon
+            altitude) 
+        else:
+            self.master.mav.command_long_send(self.master.target_system, self.master.target_component,
+            mavutil.mavlink.MAV_CMD_DO_SET_HOME,
+            1, # set position
+            1, # param1 # if this value is set to 1 then it should use the current position!
+            0, # param2
+            0, # param3
+            0, # param4
+            0, # lat
+            0, # lon
+            0) 
+
+        #acknoledge the command was sent
+        self.acknowledge_command()
+
+        # check that position was set correctly --> first need to check that this function is working properly 
+        self.get_home_position()
+
+    def get_home_position(self):
+        self.master.mav.command_long_send(self.master.target_system, self.master.target_component,
+        mavutil.mavlink.MAV_CMD_GET_HOME_POSITION, 
+        0, # May want to try setting this value to one... do not go deep into why this would work
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0)
+
+        # acknowledge the command was sent
+        self.acknowledge_command()
+
+        # view message --> should be sent as HOME_POSITION message
+        self.view_message_loop('HOME_POSITION',stopafterone=True)
+
+    def change_altitue_condition(self,altitude):
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
+            mavutil.mavlink.MAV_CMD_CONDITION_CHANGE_ALT, 
+            0, # May want to try setting this value to one... do not go deep into why this would work
+            1, # Rate at which of decent
+            0,
+            0,
+            0,
+            0,
+            0,
+            altitude) # altitude in meters (documentation does not specify the frame but assume global ralative)
+        
+        # acknowledge the command was sent
+        self.acknowledge_command()
+
+    def change_yaw_condition(self,yaw):
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
+            mavutil.mavlink.MAV_CMD_CONDITION_YAW, 
+            0, # May want to try setting this value to one... do not go deep into why this would work
+            1, # Rate at which of decent
+            0,
+            0,
+            0,
+            0,
+            0,
+            yaw) # altitude in meters (documentation does not specify the frame but assume global ralative)
+
+        # acknowledge the command was sent
+        self.acknowledge_command()
+
+    def change_altitude_DO(self,altitude):
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
+            mavutil.mavlink.MAV_CMD_DO_CHANGE_ALTITUDE, 
+            1, # May want to try setting this value to one... do not go deep into why this would work
+            1, # Altitude
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, # Frame to use
+            0,
+            0,
+            0,
+            0,
+            altitude) # altitude in meters (documentation does not specify the frame but assume global ralative)
+        
+        # acknowledge the command was sent
+        self.acknowledge_command()
+
+    def goto_this_position(self,yaw,lat,long,alt):
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
+            master.mavutil.MAV_CMD_OVERRIDE_GOTO,
+            0,
+            mavutil.mavlink.MAV_GOTO_DO_HOLD, # pause mission
+            mavutil.mavlink.MAV_GOTO_HOLD_AT_SPECIFIED_POSITION, # hold at specified position
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT, # frame
+            yaw, # desired yaw
+            lat, # desired latitude
+            long, # desired longitude
+            alt) # desired altitude
+
+        # acknowledge the command was sent
+        self.acknowledge_command()
+
+    # NOTE: due to the params of this command I will try different methods of calling it
+    def takeoff_hack(self, yaw, lat, long, alt):
+        # 1.)
+        # command_long method
+        self.master.mav.command_long_send(self.master.target_system,self.master.target_system,
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,
+            0,
+            0, # pitch
+            0,
+            0,
+            yaw, # yaw
+            lat, # latitude position
+            long, # longitude position
+            alt) # altitude position
+
+        # 2.)
+        # command_int method
+        """
+        self.master.mav.mav.command_int_send(self.master.target_system,self.master.target_component,
+            mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT, # frame
+            mavutil.mavlink.MAV_CMD_NAV_TAKEOFF, # command
+            0,
+            0, 
+            0, # pitch
+            0,
+            0,
+            yaw, # yaw
+            lat, # latitude position
+            long, # longitude position
+            alt) # altitude position
+        """
+
+        # 3.)
+        # misison method --> need other components of the mission protocal
+
+
+    def define_mission_vanillia(self,seq,yaw,lat,long,alt,frame=mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT,command=mavutil.mavlink.MAV_CMD_NAV_WAYPOINT,current=0,autocontinue=1):
+        p = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, seq, frame,
+                                                        command,
+                                                        current, autocontinue,
+                                                        0, # param 1 --> Hold time [s]
+                                                        0, # param 2 --> accepted radius [m]
+                                                        0, # param 3 --> pass radius [m]
+                                                        yaw, # param 4 [deg]
+                                                        lat, # param 5
+                                                        long, # param 6
+                                                        alt) # param 7
+        self.wp.add(p)
+
+
+    def define_mission_nav_waypoint(self,seq,yaw,lat,long,alt):
+        frame = mavutil.mavlink.MAV_FRAME_GLOBAL_RELATIVE_ALT_INT
+        command = mavutil.mavlink.MAV_CMD_NAV_WAYPOINT
+        current= 0 # current waypoint that the mission is on
+        autocontinue = 1 # continue to the next waypoint once the current waypoint has been reached
+        p = mavutil.mavlink.MAVLink_mission_item_message(master.target_system, master.target_component, seq, frame,
+                                                                command,
+                                                                current, autocontinue,
+                                                                0, # param 1 --> Hold time [s]
+                                                                0, # param 2 --> accepted radius [m]
+                                                                0, # param 3 --> pass radius [m]
+                                                                yaw, # param 4 [deg]
+                                                                lat, # param 5
+                                                                long, # param 6
+                                                                alt) # param 7
+        
+        # NOTE: there is disparity on whether how the parameters should be defined in reference to the frame.  
+                # --> if _INT frame in global then the parameters should be scaled by 1e7 
+                # --> if _INT frame in local then parameters should be scaled by 1e4
+                # --> if non _INT then the parameters should not be scaled.
+
+                # This is due to encoding the date for int values that get used in _INT frames and not having to encode data due to float types being used in non _INT frames
+
+                # ADDITIONLLY: some packages are just expected to decode messages becasue they will expect them to be encoded int values.  Therefor it is a safe bet to use _INT frame encoded
+                # HOWEVER: because this is a unique type of function call that I have not seen before I will not encode the numbers at first and see what happene
+                # ** next test should be changing the frame, then change to frame back to _INT and scale the vales by 1e7
+
+        self.wp.add(p)
+
+    def mission_execute(self,yaw,lat,long,alt):
+        # Set the home position to the initial posiition of the trajectory... all other waypoints will be defined as if this position is the origin
+        # if you want to set the current position as the home position then set_home_posiiton definition needs to be altered
+        self.set_home_position(lat[0],long[0],alt[0])
+
+        # add all waypoints to the initiated wp class
+        for i in range(len(lat)):
+            self.define_mission_nav_waypoint(i,yaw[i],lat[i],long[i],alt[i])
+
+        # clear all waypoints that could possibly be there now
+        master.waypoint_clear_all_send()
+        # send the MISSION_COUNT(n) command
+        master.waypoint_count_send(self.wp.count())      
+
+        # upload mission
+        for i in range(self.wp.count()):
+            msg = master.recv_match(type=['MISSION_REQUEST'],blocking=True)
+            print(msg)
+            master.mav.send(self.wp.wp(msg.seq))
+            print('Sending waypoint {0}'.format(msg.seq))
+
+        # confirmation of mission upload completion --> make sure to check message and see it it gets 0 for message completion type
+        print("just waiting on mission complete acknowledgement")
+        self.view_message_loop('MISSIN_ACK')
+
+    def set_current_waypoiny(self,seq):
+        self.master.waypoint_set_current_send(seq)
+
+        # see if message was executed properly:
+        # ---> change message type --> On failure, the Drone must broadcast a STATUSTEXT with a MAV_SEVERITY and a string stating the problem. This may be displayed in the UI of receiving systems.
+        self.view_message_loop('MISSION_CURRENT',stopafterone=True)
+
+
 
 if __name__ == "__main__":
     """
     Documentation of using code:
 
         Understanding how pymavlink is created:
-            - Pymavlink is createed
+            - Pymavlink is createed from code generator -> mavgen
+    """
+    """
+    Testing:
+    ** note that a possible way for calling command_int_send was found by using master.mav.mav.command_int_send()
+
+    # can be done in lab:
+        1.) Test getting message intervals function: get_message_interval()
+            - There is currently an issure with the frequency that the values are coming in... Can not get the values to go back to 0hz
+
+        2.) Test setting message intervals function: request_message()
+            - There is currently an issure with the frequency that the values are coming in... Can not get the values to go back to 0hz
+
+        3.) Test if added functionality for seeing messages only once is working. function: view _message_loop(stopafterone=True)
+
+        4.) Test if added functionality for returning message values is working. function: view _message_loop(returnvalue=True) NOTE: stopafterone must also be True
+
+        5.) Test getting the home position with cmd: MAV_CMD_GET_HOME_POSITION . function: get_home_position()
+
+        6.) Test setting the home position with function: set_home_position()
+            - Also try doing so by using current position
+
+        ** The reason that the home position is so important is because it defines the cordinate system for GLOBAL_RELATIVE 
+        NOTE: There is mention that mission protocal for ArduPilot and PX4 cannot compete mission in anyhting other than global, therefore this frame has to work... Actual Global will not be fesible
+
+    # Done at pool
+        1.) Test setting the bluerov to guided mode using new functionality: set_mode() ---> see what mode id is equal to 4 can be printed from function
+            - Also want to see if there is any change in outcome of guided mode from functions: enable_guided_mode() , set_guided_master() , set_guided_limits()
+            - will need to be tested if it fixes the weird action being taken be the bluerov... this will require bluerov to be armed
+
+        2.) Test using hacking waypoint movements:
+            - condition altitude and yaw commands : function: change_yaw() and change_altitude()
+            - DO commands. functions: change_altitude_DO() and goto_this_position()
+
+        3.) Test mission upload  function: mission_execute()
+            - NOTE: if everyhting works but the bluerov is still not moving then the autocontinue is not wokring and this may be a problem worth looking into
+            --> Be sure to play with the frames, encoded values, and the type being used
+
+        4.) Test mission execution --> by set_current_waypoint()
+            - change seq to 1 and see what happens... if then to 2 and see what happens
+
+        5.) Test updated manual control
     """
 
     rovmav = ROVMAV()
-    rovmav.mission_count()
+    #rovmav.mission_count()
 
     #rovmav.request_message()
     #rovmav.view_message_loop('LOCAL_POSITION_NED',atthisrate=0)
