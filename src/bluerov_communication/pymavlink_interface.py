@@ -141,11 +141,10 @@ class ROVMAV(object):
         output = None
         it = 0
         while True:
-            #self.view_message(msg)
             try:
-                print(self.master.recv_match(type=msg).to_dict())
+                output = self.master.recv_match(type=msg).to_dict()
+                print(output)
                 if stopafterone:
-                    output = self.master.recv_match(type=msg).to_dict()
                     break
             except:
                 pass
@@ -153,7 +152,7 @@ class ROVMAV(object):
             it += 1
             if forthismanyiterations == it:
                 break
-        
+
         if returndata:
             return output
 
@@ -209,9 +208,9 @@ class ROVMAV(object):
             pass
 
     
-    def request_message(self,msg,msgid,atthisfrequency=1):
+    def request_message_interval(self,msgid,atthisfrequency=10,msg=None): # Default is 10 messages per second
         """
-        REQUEST MESSAGE
+        REQUEST MESSAGE --> NOTE: you are actually also setting the frequency at which the message gets sent... this is mportant
             If message is not appearing when asking for it in view_message() then you me need to request autopilot to broadcast the message.
 
             NOTE: this functionality will always execute the command sucessfilly as long as the message requested is a valid message; however, this does entirly meean that the 
@@ -222,33 +221,49 @@ class ROVMAV(object):
                     - used to call view message function so content requested can potentially be printed to the terminal
                 msgid
                     - Enum found in mavlink repository that identifies the message
-                    - NOTE: must be defined as MAVLINK_MSG_ID_{msg} *** 
+                    - NOTE: must be defined as mavutil.mavlink.MAVLINK_MSG_ID_{msg} *** 
                 atthisfrequency
                     - define the frequency at which the message should be brodacast at
 
         """
-        self.master.mav.command_long_send( self.master.target_system, self.master.target_component, mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 0,
+        self.master.mav.command_long_send( self.master.target_system, self.master.target_component, 
+                mavutil.mavlink.MAV_CMD_SET_MESSAGE_INTERVAL, 
+                0,
                 msgid, # The MAVLink message ID
-                1e6 / atthisfrequency, # The interval between two messages in microseconds. Set to -1 to disable and 0 to request default rate.
-                0, 0, 0, 0, # Unused parameters
-                0, ) # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.    
-        self.acknowledge_command()
-        self.view_message(msg)
+                1e6 / atthisfrequency, # The interval between two messages in microseconds. data needs to be sent in micro(hz) hence the 1e6
+                0, 
+                0, 
+                0, 
+                0, # Unused parameters
+                0) # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.    
+        #self.acknowledge_command()
+        #self.view_message(msg)
+        self.get_message_interval(msgid)
+
+        if msg != None:
+            print('looking for message... if not appearing after sometime then message is unavailable now')
+            self.view_message_loop(msg,stopafterone=True)
 
 
     def get_message_interval(self,msg):
         """
         NOTE: msg must be defned as must be defined as MAVLINK_MSG_ID_{message} *** cn be found in minimun.xml
         """
-        self.master.mav.command_long_send( self.master.target_system, self.master.target_component, mavutil.mavlink.MAV_CMD_GET_MESSAGE_INTERVAL, 0,
-                msg, # The MAVLink message ID
-                0, # The interval between two messages in microseconds. Set to -1 to disable and 0 to request default rate.
-                0, 0, 0, 0, # Unused parameters
-                0, ) # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.    
-        self.acknowledge_command()
+        self.master.mav.command_long_send( self.master.target_system, self.master.target_component, 
+            mavutil.mavlink.MAV_CMD_GET_MESSAGE_INTERVAL, 
+            0,
+            msg, # The MAVLink message ID
+            0, # The interval between two messages in microseconds. Set to -1 to disable and 0 to request default rate.
+            0, 
+            0, 
+            0, 
+            0, # Unused parameters
+            0) # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.    
 
+        # NOTE: Do not call an acknowledge function is you are trying to see a particular message... Just look for the particuar message you are after
         # response should be found in a MESSAGE_INTERVAL message
-        self.view_message_loop('MESSAGE_INTERVAL',stopafterone=True)
+        data = self.view_message_loop('MESSAGE_INTERVAL',stopafterone=True,returndata=True)
+        print('Interval between sent messages [s]: ', data['interval_us']*1e-6)
 
 
     def arm_rov(self):
@@ -313,7 +328,6 @@ class ROVMAV(object):
                 - MANUAL
 
             NOTE: All modes contain MANUAL functionallity built on top of them except GUIDED mode
-
         """
         if mode in self.master.mode_mapping():
             # Get mode ID
@@ -326,15 +340,16 @@ class ROVMAV(object):
                 mavutil.mavlink.MAV_CMD_DO_SET_MODE, 0, mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED, mode_id, 0, 0, 0, 0, 0)
             """
 
-            """
+
+
             self.master.mav.set_mode_send(
                 self.master.target_system,
                 mavutil.mavlink.MAV_MODE_FLAG_CUSTOM_MODE_ENABLED,
                 mode_id)
-            """
+
 
             # try different way of setting guided mode: MASON
-            mavutil.mavfile.set_mode(self.master,'GUIDED',0,0)
+            #mavutil.mavfile.set_mode(self.master,'GUIDED',0,0)
 
             # Wait for ACK command
             self.acknowledge_command()
@@ -344,7 +359,7 @@ class ROVMAV(object):
             print('Unknown mode : {}'.format(mode))
             print('Try:', list(self.master.mode_mapping().keys()))
 
-    
+    # result: 3
     def enable_guided_mode(self):
         self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
         mavutil.mavlink.MAV_CMD_NAV_GUIDED_ENABLE,
@@ -356,7 +371,7 @@ class ROVMAV(object):
         0,
         0,
         0)
-
+    # result: 3
     def set_guided_master(self):
         self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
             mavutil.mavlink.MAV_CMD_DO_GUIDED_MASTER,
@@ -369,7 +384,7 @@ class ROVMAV(object):
             0,
             0)
 
-
+    # result: 3
     def set_guided_limits(self):
         self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
             mavutil.mavlink.MAV_CMD_DO_GUIDED_LIMITS,
@@ -494,6 +509,8 @@ class ROVMAV(object):
         """
         while True:
             self.keyboard_controlls()
+            if keyboard.is_pressed("q"):
+                break
 
 
 # Need to make it act as a stream.. or take into account each case... use switch statements
@@ -507,7 +524,7 @@ class ROVMAV(object):
                 (l .) --> vertical movement (z)
                 (, /) --> lateral movement (y)
         """
-        thruster_power = 55
+        thruster_power = 135
         thruster_nominal = 1500
 
         if keyboard.is_pressed("space"):
@@ -574,7 +591,7 @@ class ROVMAV(object):
             self.set_target_attitude(roll_angle, pitch_angle, yaw_angle)
             time.sleep(1)
 
-    def set_target_depth(self,depth):
+    def set_target_depth(self,x,y,depth):
         """ Sets the target depth while in depth-hold mode.
 
         Uses https://mavlink.io/en/messages/common.html#SET_POSITION_TARGET_GLOBAL_INT
@@ -588,20 +605,20 @@ class ROVMAV(object):
             int(1e3 * (time.time() - self.boot_time)), # ms since boot
             self.master.target_system, self.master.target_component,
             coordinate_frame=mavutil.mavlink.MAV_FRAME_GLOBAL_INT,
-            type_mask=( # ignore everything except z position
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
+            type_mask=0b110111111100, #( # ignore everything except z position ---> 3580 (decimal)
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
                 # DON'T mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |#
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE
-            ), lat_int=0, lon_int=0, alt=depth, # (x, y WGS84 frame pos - not used), z [m]
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+                ##mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |#
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE), 
+            lat_int=0, lon_int=0, alt=depth, # (x, y WGS84 frame pos - not used), z [m]
             vx=0, vy=0, vz=0, # velocities in NED frame [m/s] (not used)
             afx=0, afy=0, afz=0, yaw=0, yaw_rate=0
             # accelerations in NED frame [N], yaw, yaw_rate
@@ -612,22 +629,24 @@ class ROVMAV(object):
         self.master.mav.set_position_target_local_ned_send(
             int(1e3 * (time.time() - self.boot_time)),
             self.master.target_system, self.master.target_component,
-            coordinate_frame=mavutil.mavlink.MAV_FRAME_LOCAL_NED,
-            type_mask=( # ignore everything except z position
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
-                # DON'T mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
+            coordinate_frame=mavutil.mavlink.MAV_FRAME_LOCAL_OFFSET_NED, # OFFSET is taken from current position
+            type_mask=0b110111111100, #( # ignore everything except z position ---> 3580 (decimal)
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_X_IGNORE |
+                #mavutil.mavlink.POSITION_TARGET_TYPEMASK_Y_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_Z_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_VX_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_VY_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_VZ_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_AX_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_AY_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_AZ_IGNORE |
                 #mavutil.mavlink.POSITION_TARGET_TYPEMASK_FORCE_SET |#
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
-                mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE
-            ), x=0,y=0,z=depth,vx=0,vy=0,vz=0,afx=0,afy=0,afz=0,yaw=0,yaw_rate=0
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_IGNORE |
+               # mavutil.mavlink.POSITION_TARGET_TYPEMASK_YAW_RATE_IGNORE), 
+            x=x,y=y,z=depth,vx=0,vy=0,vz=0,afx=0,afy=0,afz=0,yaw=0,yaw_rate=0
         )
+
+
     """
     Below are functions needed in order to execute the mission protocal outlined in:
     https://mavlink.io/en/services/mission.html#mission_types
@@ -693,8 +712,9 @@ class ROVMAV(object):
         self.acknowledge_command()
 
         # check that position was set correctly --> first need to check that this function is working properly 
-        self.get_home_position()
+        #self.get_home_position()
 
+    # command is valid but no HOME_POSITION is showing up in portal
     def get_home_position(self):
         self.master.mav.command_long_send(self.master.target_system, self.master.target_component,
         mavutil.mavlink.MAV_CMD_GET_HOME_POSITION, 
@@ -708,10 +728,12 @@ class ROVMAV(object):
         0)
 
         # acknowledge the command was sent
-        self.acknowledge_command()
-
+        #self.acknowledge_command()
+            # commad: 410 result: 4
+            # MEMINFO
+        self.view_message_loop(atthisrate=1)
         # view message --> should be sent as HOME_POSITION message
-        self.view_message_loop('HOME_POSITION',stopafterone=True)
+        #self.view_message_loop('HOME_POSITION',stopafterone=True)
 
     def change_altitue_condition(self,altitude):
         self.master.mav.command_long_send(self.master.target_system,self.master.target_component,
@@ -897,29 +919,33 @@ if __name__ == "__main__":
     Testing:
     ** note that a possible way for calling command_int_send was found by using master.mav.mav.command_int_send()
 
-    # can be done in lab:
-        1.) Test getting message intervals function: get_message_interval()
-            - There is currently an issure with the frequency that the values are coming in... Can not get the values to go back to 0hz
+    # Can be done in lab:
+       * 1.) Test getting message intervals function: get_message_interval()
+       **     - There is currently an issure with the frequency that the values are coming in... Can not get the values to go back to 0hz
 
-        2.) Test setting message intervals function: request_message()
-            - There is currently an issure with the frequency that the values are coming in... Can not get the values to go back to 0hz
+       * 2.) Test setting message intervals function: request_message()
+       **     - There is currently an issure with the frequency that the values are coming in... Can not get the values to go back to 0hz
 
-        3.) Test if added functionality for seeing messages only once is working. function: view _message_loop(stopafterone=True)
+       * 3.) Test if added functionality for seeing messages only once is working. function: view _message_loop(stopafterone=True)
 
-        4.) Test if added functionality for returning message values is working. function: view _message_loop(returnvalue=True) NOTE: stopafterone must also be True
+       * 4.) Test if added functionality for returning message values is working. function: view _message_loop(returnvalue=True) NOTE: stopafterone must also be True
 
-        5.) Test getting the home position with cmd: MAV_CMD_GET_HOME_POSITION . function: get_home_position()
+       DO NOT WANT TO RISK ACTUATNG MOTORS 5.) Test getting the home position with cmd: MAV_CMD_GET_HOME_POSITION . function: get_home_position()
+        --> Appently can not set home position: Possible reasons: 1. dvl was disconnected 2. was not armed 3. mode was not set 4. 2&3
 
-        6.) Test setting the home position with function: set_home_position()
+       DO NOT WANT TO RISK ACTUATNG MOTORS 6.) Test setting the home position with function: set_home_position()
             - Also try doing so by using current position
 
         ** The reason that the home position is so important is because it defines the cordinate system for GLOBAL_RELATIVE 
         NOTE: There is mention that mission protocal for ArduPilot and PX4 cannot compete mission in anyhting other than global, therefore this frame has to work... Actual Global will not be fesible
 
+        7.) Need to determine where the local pose is initiated from
+
     # Done at pool
         1.) Test setting the bluerov to guided mode using new functionality: set_mode() ---> see what mode id is equal to 4 can be printed from function
             - Also want to see if there is any change in outcome of guided mode from functions: enable_guided_mode() , set_guided_master() , set_guided_limits()
             - will need to be tested if it fixes the weird action being taken be the bluerov... this will require bluerov to be armed
+            - with these new funtions called see if it effects the orginal method for setting waypoints... set_target_depth()
 
         2.) Test using hacking waypoint movements:
             - condition altitude and yaw commands : function: change_yaw() and change_altitude()
@@ -932,10 +958,16 @@ if __name__ == "__main__":
         4.) Test mission execution --> by set_current_waypoint()
             - change seq to 1 and see what happens... if then to 2 and see what happens
 
-        5.) Test updated manual control
+       * 5.) Test updated manual control
     """
 
     rovmav = ROVMAV()
+    #rovmav.set_mode('GUIDED')
+    #rovmav.view_message_loop('HEARTBEAT')
+    #rovmav.set_home_position(0,0,76,startatcurrent=False)
+    #rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_GLOBAL_POSITION_INT,msg='GLOBAL_POSITION_INT')
+    #rovmav.get_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_SYSTEM_TIME)
+    #rovmav.request_message(mavutil.mavlink.MAVLINK_MSG_ID_SYSTEM_TIME,atthisfrequency=10)
     #rovmav.mission_count()
 
     #rovmav.request_message()
@@ -944,21 +976,13 @@ if __name__ == "__main__":
     #rovmav.set_parameter_value(-10,'SURFACE_DEPTH')
     #rovmav.request_parameter_value('SURFACE_DEPTH')
 
-    #rovmav.arm_rov()
+
+    #rovmav.set_mode()
+    #rovmav.view_message_loop('HEARTBEAT')
     #rovmav.set_mode('GUIDED')
-
-    #rovmav.set_target_depth(3)
-    #print('mason')
-    #rovmav.view_message_loop('COMMAND_ACK',atthisrate=0)
-    #rovmav.test_yaw()
+    rovmav.set_mode('STABILIZE')
+    #rovmav.set_mode('POSHOLD')
     #rovmav.disarm_rov()
-
-    #rovmav.manual_control_loop()
-
-    #rovmav.request_message('AHRS2',mavutil.mavlink.MAVLINK_MSG_ID_AHRS2)
-
-    #rovmav.send_command_long()
-    #rovmav.set_parameter_value(0.8,'PSC_VELXY_D')
-    #rovmav.request_parameter_value('PSC_VELZ_P')
-
-    #rovmav.disarm_rov()
+    rovmav.arm_rov()
+    rovmav.manual_control_loop()
+    rovmav.disarm_rov()
