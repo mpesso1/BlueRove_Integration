@@ -1,3 +1,4 @@
+
 cmake_minimum_required(VERSION 3.0.2)
 project(blue_rov_custom_integration)
 
@@ -13,6 +14,10 @@ find_package(catkin REQUIRED COMPONENTS
 add_service_files (
   FILES
   update_waypoint.srv
+  control_pid.srv
+  control_pathplanner.srv
+  pathplanner_update_waypoint.srv
+  byte_update.srv
 )
 
 generate_messages(

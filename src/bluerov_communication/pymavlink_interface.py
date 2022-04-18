@@ -79,6 +79,10 @@ class ROVMAV(object):
 
         wp = mavwp.MAVWPLoader()
 
+        self.system_armed = False
+
+        self.startup_ONS = False
+
 
     def acknowledge_command(self):
         """
@@ -157,7 +161,7 @@ class ROVMAV(object):
             return output
 
 
-    def view_message(self,msg=None):
+    def view_message(self,msg=None,returndata=False):
         """
         VIEW MESSAGES   NOTE: will NOT loop
             By default a server communicating on a Mavlink channel will broadcast a specific set of mssages.  This fuction will print those messages to the terminal.
@@ -203,10 +207,12 @@ class ROVMAV(object):
                 - tp
         """
         try:
-            print(self.master.recv_match(type=msg).to_dict())
+            output = self.master.recv_match(type=msg).to_dict()
+            print(output) # need t comment this out when actually implimenting
         except:
             pass
-
+        if returndata:
+            return output
     
     def request_message_interval(self,msgid,atthisfrequency=10,msg=None): # Default is 10 messages per second
         """
@@ -283,6 +289,7 @@ class ROVMAV(object):
         print("Waiting for the vehicle to arm")
         self.master.motors_armed_wait()
         print('Armed!')
+        self.system_armed = True
 
 
     def disarm_rov(self):
@@ -300,6 +307,7 @@ class ROVMAV(object):
         # wait until disarming confirmed
         self.master.motors_disarmed_wait()
         print("Disarmed")
+        self.system_armed = False
 
 
     def print_available_rov_modes(self):
@@ -512,9 +520,32 @@ class ROVMAV(object):
             if keyboard.is_pressed("q"):
                 break
 
+    def ARMROV_withkey(self,key):
+        if keyboard.is_pressed(key):
+            self.arm_rov()
+
+    def DISARMROV_withkey(self,key):
+        if keyboard.is_pressed(key):
+            self.disarm_rov()
+
+    def INIT_STARTUP_withkey(self,key,mode):
+        if keyboard.is_pressed(key) and not self.startup_ONS:
+            self.set_mode(mode)
+            self.arm_rov()
+            self.startup_ONS = True
+            self.system_armed = True
+            time.sleep(.1)
+
+    def INIT_SHUTDOWN_withkey(self,key):
+        if keyboard.is_pressed(key) and self.startup_ONS:
+            self.set_mode('POSHOLD')
+            self.disarm_rov
+            self.startup_ONS = False
+            self.system_armed = False
+            time.sleep(.1)
 
 # Need to make it act as a stream.. or take into account each case... use switch statements
-    def keyboard_controlls(self):
+    def keyboard_controlls(self,pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,letsride=True):
         """
         KEYBOARD TO THRUST MAPPING
             Mapping:
@@ -523,18 +554,34 @@ class ROVMAV(object):
 
                 (l .) --> vertical movement (z)
                 (, /) --> lateral movement (y)
+
+            INPUT:
+                pid_thrust_{} TYPE: float
+                    - output from the pid controlled. 
+                    - used to autonomously control the bluerov without manually having to use controls
+                letsride  TYPE: boolean
+                    - defines if the bluerov will be completing a trajectory
+
         """
-        thruster_power = 135
+        thruster_power = 75
         thruster_nominal = 1500
 
-        if keyboard.is_pressed("space"):
+        # Safety check on pid values not exceeding known maximum wanted thrust
+        if pid_thrust_x > 150:
+            pid_thrust_x = 150
+        if pid_thrust_y > 150:
+            pid_thrust_y = 150
+        if pid_thrust_z > 150:
+            pid_thrust_z = 150
+
+        if keyboard.is_pressed("space") or letsride:
 
             if keyboard.is_pressed("w"):
                 self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power)
             elif keyboard.is_pressed("s"):
                 self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power*-1)
             else:
-                self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal)
+                self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+pid_thrust_x)
                 
             if keyboard.is_pressed("d"):
                 self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power)
@@ -549,7 +596,7 @@ class ROVMAV(object):
             elif keyboard.is_pressed("."):
                 self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power*-1)
             else:
-                self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal)
+                self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+pid_thrust_z)
                 
 
             if keyboard.is_pressed(","):
@@ -557,9 +604,15 @@ class ROVMAV(object):
             elif keyboard.is_pressed("/"):
                 self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+thruster_power*-1)
             else:
-                self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal)
+                self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+pid_thrust_y)
                 
 
+            
+            if keyboard.is_pressed('1'):
+                self.arm_rov()
+
+            if keyboard.is_pressed('2'):
+                self.disarm_rov()
         
 
     def set_target_attitude(self,roll, pitch, yaw):
@@ -962,6 +1015,13 @@ if __name__ == "__main__":
     """
 
     rovmav = ROVMAV()
+    #rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,100)
+    rovmav.set_mode('STABILIZE')
+    time.sleep(2)
+    rovmav.arm_rov()
+    rovmav.test_yaw()
+    #rovmav.view_message_loop('AHRS2')
+    
     #rovmav.set_mode('GUIDED')
     #rovmav.view_message_loop('HEARTBEAT')
     #rovmav.set_home_position(0,0,76,startatcurrent=False)
@@ -980,9 +1040,9 @@ if __name__ == "__main__":
     #rovmav.set_mode()
     #rovmav.view_message_loop('HEARTBEAT')
     #rovmav.set_mode('GUIDED')
-    rovmav.set_mode('STABILIZE')
+    #rovmav.set_mode('STABILIZE')
     #rovmav.set_mode('POSHOLD')
     #rovmav.disarm_rov()
-    rovmav.arm_rov()
-    rovmav.manual_control_loop()
-    rovmav.disarm_rov()
+    #rovmav.arm_rov()
+    #rovmav.manual_control_loop()
+    #rovmav.disarm_rov()

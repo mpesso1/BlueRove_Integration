@@ -48,7 +48,7 @@ void pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
         cs = cs.transpose();
     }
     area_error = (ds - cs)*(dt);
-    integral_error = area_error + integral_error;
+    integral_error = integral_error + area_error;
     controller_output = dot(proportional_gain,(ds - cs)) + dot(integral_gain,integral_error) + dot(derivative_gain,(old_error-(ds - cs))/dt);
     old_error = ds - cs;
 }
