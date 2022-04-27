@@ -1,7 +1,5 @@
 bool PID_on
 bool PID_off
 bool New_Traj
-bool cv_initiate_reset
 ---
-bool action_taken
 bool pid_healthy

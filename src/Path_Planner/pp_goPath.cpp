@@ -14,6 +14,8 @@ AUTHOR: MASON PESSON
 #include "blue_rov_custom_integration/control_pathplanner.h"
 #include "blue_rov_custom_integration/pathplanner_update_waypoint.h"
 
+#include <fstream>
+
 
 /*
 pp_goPath
@@ -32,11 +34,9 @@ pp_goPath
 using namespace std;
 using namespace root;
 
-void add_object_xyz(float x, float y, float z); // Defined under main
-
 // Waypoint / Final Goal Data
 bool NEED_NEW_WAYPOINT = true;// indication if we need new trajectory
-bool NEW_TRAJ; // boolian defining if new path is going to be generated
+bool NEW_TRAJ = false; // boolian defining if new path is going to be generated
 float x_goal_wp;
 float y_goal_wp;
 float z_goal_wp;
@@ -76,45 +76,20 @@ Eigen::Matrix<float,60+1, 3> path_trans;
 Eigen::Matrix<float,60+1, 3> path_angular; // currently need the amount of steps to be set to 60
 
 
+// Adds an object into the object array that gets iterated over while defining the trajectory
+void add_object_xyz(float x, float y, float z); // Defined under main
+
+
 // Server response decloration -------------------------
 bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, blue_rov_custom_integration::update_waypoint::Response &res);
 
 
 // only gets called whenever the system byte has changed and communicated through the ROSHUM node
-bool pp_control_action(blue_rov_custom_integration::control_pathplanner::Request &req, blue_rov_custom_integration::control_pathplanner::Response &res) {
-    if (req.cv_said_new_path) {
-        NEW_TRAJ = true;
-        res.cv_enforced = true;
-    }
-    else if (req.ask_if_new_path_needed) {
-        if (NEED_NEW_WAYPOINT) {
-            NEW_TRAJ = true;
-        }
-    }
-    else {
-        NEW_TRAJ = false;
-    }
+bool pp_control_action(blue_rov_custom_integration::control_pathplanner::Request &req, blue_rov_custom_integration::control_pathplanner::Response &res);
 
-    if (NEW_TRAJ) {
-        res.need_new_path = true;
-    }
-    else {
-        res.need_new_path = false;
-    }
+// Input from ROVHUM defining the goal waypoint
+bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoint::Request &req, blue_rov_custom_integration::pathplanner_update_waypoint::Response &res);
 
-    res.pp_healthy = true;
-}
-
-
-bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoint::Request &req, blue_rov_custom_integration::pathplanner_update_waypoint::Response &res) {
-    x_goal_wp = req.x;
-    y_goal_wp = req.y;
-    z_goal_wp = req.z;
-    yaw_goal_wp = req.yaw;
-
-    add_object_xyz(req.ox,req.oy,req.oz);
-    // need a way of not adding objects whenever cv does not add new object otherwise this will add an object to location 0
-}
 
 // ** MAIN ** ------------------------------------------ *********
 int main(int argc,char** argv) {
@@ -136,12 +111,14 @@ int main(int argc,char** argv) {
     return 0;
 }
 
+
 // Create pseudo objects function
 void add_object_xyz(float x, float y, float z) {
     objx.push_back(x);
     objy.push_back(y);
     objz.push_back(z);
 }
+
 
 // WILL NOT GET CALLED UNTIL PID GET CALLED FROM ROSHUM
 bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, blue_rov_custom_integration::update_waypoint::Response &res) {
@@ -152,69 +129,98 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
     // first the byte must change then second the pp must declare that is needs a path then then third the pid must be turned on
     // pid dirrectly communicates with the path planner so it will be able to indicate that it needs a new traj within the service call
     if (NEW_TRAJ && req.NewTraj) { // HANDSHAKE between the pid and the path planner on if a new path needs to be generated
+
+        //""" Do not generate new trajectory until needed again. Just feed waypoints """;
+        NEW_TRAJ = false;
         // Initialize prior trajectories ----------------------
         /* acceleration, init velocity, init poition, final position, indx of DOF (used for algorithm), boolian defining ocv */
-
         BlueRov.add_DOF(MAX_ACCEL, req.x_vel, req.x, x_goal_wp, 0, true); 
         BlueRov.add_DOF(MAX_ACCEL, req.y_vel, req.y, y_goal_wp, 1, true); 
         BlueRov.add_DOF(MAX_ACCEL, req.z_vel, req.z, z_goal_wp, 2, true);
-        BlueRov.add_DOF(MAX_ACCEL, req.thx_vel, req.thx, 0, 3, false);
-        BlueRov.add_DOF(MAX_ACCEL, req.thy_vel, req.thy, 0, 4, false);
-        BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, yaw_goal_wp, 5, false);
-
-        /*//::::: TESTING
-        BlueRov.add_DOF(MAX_ACCEL, 2, 0, 5, 0, true); 
-        BlueRov.add_DOF(-MAX_ACCEL, 2, 0, 5, 1, true); 
-        BlueRov.add_DOF(-MAX_ACCEL, 2, 0, 10, 2, true);
         BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 3, false);
         BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 4, false);
-        BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 5, false);
-        // ----------------------------------------------------*/
+        BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, yaw_goal_wp, 5, false);
 
-        // Pseudo objects cordinates
-        /*add_object_xyz(2.59,2.86,3.31);
-        add_object_xyz(3.75,5.46,8.68);
-        add_object_xyz(2.2,3.8,6.5);
-        add_object_xyz(3.0,4.0,7.0);
-        add_object_xyz(4.024,4.71,6.27);
-        // ----------------------------------------------------*/
 
         // Optimize trajectory based on object cordinates -----
-        BlueRov.optimize(objx,objy,objz); 
+        BlueRov.optimize(objx,objy,objz);
+        cout << "PATH CREATED";
 
         // Store trajectory -----------------------------------
         path_trans = BlueRov.trajectory_translational();
         //path_angular = BlueRov.trajectory_angular();
 
+        //ofstream myfile;
+        //myfile.open ("linear_path.txt");
+        //myfile << path_trans;
+        //myfile.close();
+        
+
         // Display trajectory ---------------------------------
         //""" Used for storing results in file system. Must use linux >> operator to redirect to results to desired file """ ; 
-        BlueRov.traj(1);
+        //BlueRov.traj(1);
 
         // ----------------------------------------------------
-        //""" Do not generate new trajectory until needed again. Just feed waypoints """;
-        NEW_TRAJ = false;
-        NEED_NEW_WAYPOINT = false;
+
     }
 
 
+    // Increment trajectory index -------------------------
+    STEP = STEP + 1;
+
+    std::cout << "Sending desired pose from pp\n";
     // Send trajectory waypoint ---------------------------
     res.x_way = path_trans(STEP,0);
     res.y_way = path_trans(STEP,1);
     res.z_way = path_trans(STEP,2);
     res.thx_way = 0;
     res.thy_way = 0;
-    res.thz_way = 0; // NOTE THAT yaw is not desired yaw is not being updated
+    res.thz_way = atan2(path_trans(STEP,1),path_trans(STEP,2)); 
 
-
-    // Once the requested path point is equal to the initial goal set point the n we can declare that the path planners job is finished and we need a new goal waypoint
-    if (res.x_way == x_goal_wp && res.y_way == y_goal_wp && res.z_way == z_goal_wp){
+    if (STEP >= STEPS) {
         NEED_NEW_WAYPOINT = true;
+        res.pathcomplete = true;
     }
 
+    return true;
+}
 
-    // Increment trajectory index -------------------------
-    STEP = STEP + 1;
-    // ----------------------------------------------------
+
+// only gets called whenever the system byte has changed and communicated through the ROSHUM node
+bool pp_control_action(blue_rov_custom_integration::control_pathplanner::Request &req, blue_rov_custom_integration::control_pathplanner::Response &res) {
+    if (req.cv_said_new_path) {
+        NEW_TRAJ = true;
+        res.cv_enforced = true;
+        res.need_new_path = true;
+    }
+    else if (req.ask_if_new_path_needed && NEED_NEW_WAYPOINT) {
+            NEW_TRAJ = true;
+            res.cv_enforced = false;
+            res.need_new_path = true;
+    }
+    else {
+        res.need_new_path = false;
+    }
+    NEED_NEW_WAYPOINT = false;
+    res.pp_healthy = true;
+
+    return true;
+}
+
+
+bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoint::Request &req, blue_rov_custom_integration::pathplanner_update_waypoint::Response &res) {
+    x_goal_wp = req.x;
+    y_goal_wp = req.y;
+    z_goal_wp = req.z;
+    yaw_goal_wp = req.yaw;
+
+    if (req.ox == 0 && req.oy == 0 && req.oz == 0) {
+        cout << " \n";
+        // need a way of not adding objects whenever cv does not add new object otherwise this will add an object to location 0
+    }
+    else {
+        add_object_xyz(req.ox,req.oy,req.oz);    
+    }
 
     return true;
 }

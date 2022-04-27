@@ -18,6 +18,7 @@ add_service_files (
   control_pathplanner.srv
   pathplanner_update_waypoint.srv
   byte_update.srv
+  cv_action.srv
 )
 
 generate_messages(
@@ -48,12 +49,15 @@ target_include_directories(pp_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/Path_P
 # pp_node
 add_executable(pp_node src/Path_Planner/pp_goPath.cpp)
 
+add_executable(pid_test src/pid/test_pid.cpp)
+
 # Controller_node
 add_executable(Controller_node src/pid/pp_pid.cpp)
-#add_executable(tester_node src/test_subscriber.cpp)
+
 
 target_link_libraries(Controller_node ${catkin_LIBRARIES} pid_lib)
 target_link_libraries(pp_node ${catkin_LIBRARIES} pp_lib)
+target_link_libraries(pid_test ${catkin_LIBRARIES} pid_lib)
 #target_link_libraries(tester_node ${catkin_LIBRARIES})
 
 

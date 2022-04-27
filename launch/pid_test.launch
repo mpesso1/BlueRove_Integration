@@ -1,0 +1,4 @@
+<launch>
+    <node pkg="blue_rov_custom_integration" type="pid_test_interface.py" name="pid_interface" output="screen"/>
+    <node pkg="blue_rov_custom_integration" type="pid_test" name="PID_TEST" output="screen" />
+</launch>

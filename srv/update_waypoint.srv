@@ -12,6 +12,7 @@ float64 thx_vel
 float64 thy_vel
 float64 thz_vel
 ---
+bool pathcomplete
 float64 x_way
 float64 y_way
 float64 z_way

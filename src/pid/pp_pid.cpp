@@ -70,11 +70,8 @@ pp_node
 bool PID_ON = false;
 bool PID_OFF = true;
 bool PID_HEALTHY = false;
-std::string ROVMAV_HEALTHY = "UNHEALTHY";
+std::string ROVMAV_HEALTH = "UNHEALTHY";
 bool NEW_TRAJ = false;
-bool cv_object_detected_reset = false;
-int thrust_nominal = 1500;
-
 
 // ENUM DEFINING DEGREES OF FREEDOM -------------------
 enum Cordinates {X, Y, Z, THX, THY, THZ}; // Position
@@ -84,7 +81,7 @@ enum Velocity {X_VEL, Y_VEL, Z_VEL, X_THVEL, Y_THVEL, Z_THVEL}; // Velocity
 
 // CONTROL VARIABLES ---------------
 const int DOF = 6; // Degrees of Freedom
-const float TOLERANCE = .0001; // UNITS: m --> defines how close the desired_pose and current_pose states need to be to one another
+const float TOLERANCE = .09; // UNITS: m --> defines how close the desired_pose and current_pose states need to be to one another
 float dt; // UNITS: s --> time difference defined by chrono library
 
 
@@ -95,27 +92,19 @@ Eigen::Matrix<float,1,6> inte_gain;
 Eigen::Matrix<float,1,6> deriv_gain;
 
 
-// only get called from ROSHUM node on system byte change
-bool pid_control_action(blue_rov_custom_integration::control_pid::Request &req, blue_rov_custom_integration::control_pid::Response &res) {
-    PID_ON = req.PID_on;
-    PID_OFF = req.PID_off;
-    NEW_TRAJ = req.New_Traj;
-
-    if (req.cv_initiate_reset){
-        cv_object_detected_reset = true;
-    }
-    res.pid_healthy = true;
-}
-
-
 // ----- States Initialized ----------------------------
 Eigen::Matrix<float,6,1> desired_pose; // from path planner
 Eigen::Matrix<float,6,1> current_pose; // from bluerov / mavlink interface
 Eigen::Matrix<float,6,1> current_velo; // from bluerov / mavlink interface
 
 
-// Odometry Callback -----------------------------------
-// gets called from ROSMAV
+// ROSHUM to PID --> System information
+// defined under main
+bool pid_control_action(blue_rov_custom_integration::control_pid::Request &req, blue_rov_custom_integration::control_pid::Response &res);
+
+
+// ROSMAV to PID  --> Odometry information
+// defined under main
 void odom_callback(const nav_msgs::Odometry& cs);
 
 
@@ -137,18 +126,17 @@ int main(int argc, char** argv) {
     ros::ServiceClient client1 = n.serviceClient<blue_rov_custom_integration::update_waypoint>("service_line_waypoint");
 
     // Server SERVICE --------------------> Server: ROSHUM <---------------
-    ros::ServiceServer pid_server = n.advertiseService("pid_system_control", &pid_control_action);
+    ros::ServiceServer pid_server = n.advertiseService("pid_system_control", pid_control_action);
 
     // PID GAIN -- (x, y, z, thx, thy, thz) ---------------------------------
-    pose_gain << .01, .01, .01, .01, .01, .01;
-    inte_gain << .01, .01, .01, .01, .01, .01;
-    deriv_gain << .01, .01, .01, .01, .01, .01;
+    pose_gain << 1, 1, 1, .01, .01, 1;
+    inte_gain << .0, .0, .0, .0, .0, .0;
+    deriv_gain << .0, .0, .0, .0, .0, .0;
 
     // PID controller object ------------------------------------------------
     pid::rosPID controller(DOF, pose_gain, inte_gain, deriv_gain);
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
-    // ----------------------------------------------------------------------
 
     nav_msgs::Odometry thrust;
 
@@ -164,12 +152,13 @@ int main(int argc, char** argv) {
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         // ------------------------------------------------------------------------------
 
-        /*
-        ROVMAV_HEALTHY gets communicated over ROV_ODOMETRY and PID_ON gets communicated over through ROVHUM... additionally NEW_TRAJ will get 
-        turned on from service between this node and ROSHUM.. communication with the path planner leads up to this
-        */
-        if (ROVMAV_HEALTHY=="HEALTHY" && PID_ON==true) { // ROVMAV_HEALTHY does not become healthy until pid pp and ROVMAV health in system byte all get set set high... Need system byte to be set to 15 or greater
+        
+        // ROVMAV_HEALTH gets communicated over ROV_ODOMETRY and PID_ON / NEW_TRAJ gets communicated through ROVHUM... communication with the path planner leads up to this
+        if (ROVMAV_HEALTH=="HEALTHY" && PID_ON==true) { // ROVMAV_HEALTH does not become healthy until pid pp and ROVMAV health in system byte all get set set high... Need system byte to be set to 15 or greater
             if (NEW_TRAJ) { 
+
+                //controller.integral_error = 0; // insure intergral error is set to 0 to avoid there being and value still stored from whenever the object was initiated
+
                 // Request to server current pose ----------------------------------------------
                 waypoint.request.NewTraj = true;
                 waypoint.request.x = current_pose(X); 
@@ -193,6 +182,9 @@ int main(int argc, char** argv) {
                     desired_pose(THX) = waypoint.response.thx_way;
                     desired_pose(THY) = waypoint.response.thy_way;
                     desired_pose(THZ) = waypoint.response.thz_way;
+                    std::cout << "DESIRED X: " << desired_pose(X) << std::endl;
+                    std::cout << "DESIRED Y: " << desired_pose(Y) << std::endl;
+                    std::cout << "DESIRED Z: " << desired_pose(Z) << std::endl;
                 }
                 else {
                     std::cout << "Waypoint Server Not Responding\n";
@@ -200,39 +192,55 @@ int main(int argc, char** argv) {
                 NEW_TRAJ = false;
             }
 
-            // Call PID step ----------------------------------------------------------------
-            controller.run_pid(dt,desired_pose,current_pose);
+            else {
 
+                // Call PID step ----------------------------------------------------------------
+                bool state_reached = controller.run_pid(dt,desired_pose,current_pose, TOLERANCE, false);
 
-            thrust.header.frame_id = "STABILITY";
-            thrust.pose.pose.position.x = controller.controller_output(X);
-            thrust.pose.pose.position.y = controller.controller_output(Y);
-            thrust.pose.pose.position.z = controller.controller_output(Z);
-            thrust.pose.pose.orientation.z = controller.controller_output(THZ);
-            rc_commands.publish(thrust);
+                if (state_reached) {
+                    
+                    waypoint.request.NewTraj = false;
+                    std::cout << "pose reached\n";
+                    // Response from server ---------------------------------------------------------
+                    if (client1.call(waypoint)) {
+                        desired_pose(X) = waypoint.response.x_way;
+                        desired_pose(Y) = waypoint.response.y_way;
+                        desired_pose(Z) = waypoint.response.z_way;
+                        desired_pose(THX) = waypoint.response.thx_way;
+                        desired_pose(THY) = waypoint.response.thy_way;
+                        desired_pose(THZ) = waypoint.response.thz_way;
 
-            if (current_pose.isApprox(desired_pose,TOLERANCE)) {
-                waypoint.request.NewTraj = false;
-                // Response from server ---------------------------------------------------------
-                if (client1.call(waypoint)) {
-                    desired_pose(X) = waypoint.response.x_way;
-                    desired_pose(Y) = waypoint.response.y_way;
-                    desired_pose(Z) = waypoint.response.z_way;
-                    desired_pose(THX) = waypoint.response.thx_way;
-                    desired_pose(THY) = waypoint.response.thy_way;
-                    desired_pose(THZ) = waypoint.response.thz_way;
+                        if (waypoint.response.pathcomplete) {
+                            thrust.header.seq = 1;
+                            PID_ON = false;
+                            PID_OFF = true;
+                        }
+                    }
+                    else {
+                        std::cout << "Waypoint Server Not Responding\n";
+                    }
                 }
                 else {
-                    std::cout << "Waypoint Server Not Responding\n";
-                }
-            }           
+                    thrust.header.frame_id = "STABILIZE";
+                    thrust.pose.pose.position.x = controller.controller_output(X)*cos(current_pose(THZ)) + controller.controller_output(Y)*sin(current_pose(THZ));
+                    thrust.pose.pose.position.y = controller.controller_output(Y)*cos(current_pose(THZ)) + controller.controller_output(X)*sin(current_pose(THZ));
+                    thrust.pose.pose.position.z = -controller.controller_output(Z);
+                    thrust.pose.pose.orientation.z = controller.controller_output(THZ);
+                    rc_commands.publish(thrust);
+
+                    //std::cout << "X xontroller output: " << controller.controller_output(X) << std::endl;
+                    //std::cout << "Y xontroller output: " << controller.controller_output(Y) << std::endl;
+                    //std::cout << "Z xontroller output: " << controller.controller_output(Z) << std::endl;
+                    //std::cout << "YAW xontroller output: " << controller.controller_output(THZ) << std::endl;
+                }   
+            }        
         }
         else { // system healthy but PID is not on
             thrust.header.frame_id = "POSHOLD";
-            thrust.pose.pose.position.x = thrust_nominal;
-            thrust.pose.pose.position.y = thrust_nominal;
-            thrust.pose.pose.position.z = thrust_nominal;
-            thrust.pose.pose.orientation.z = thrust_nominal;
+            thrust.pose.pose.position.x = 0;
+            thrust.pose.pose.position.y = 0;
+            thrust.pose.pose.position.z = 0;
+            thrust.pose.pose.orientation.z = 0;
             rc_commands.publish(thrust);
         }
 
@@ -249,26 +257,48 @@ int main(int argc, char** argv) {
 
 // Odometry callback function
 void odom_callback(const nav_msgs::Odometry& cs) { // cs := current_pose state from bluerov
-    ROVMAV_HEALTHY = cs.header.frame_id; 
+    
+    // Will not begin recieving data until odom data is being recieved from ROV and the system is armed
 
-    if (ROVMAV_HEALTHY == "HEALTHY") {
-        current_pose(X) = cs.pose.pose.position.x; // UNITS: m
-        current_pose(Y) = cs.pose.pose.position.y; // UNITS: m
-        current_pose(Z) = cs.pose.pose.position.z; // UNITS: m
+    // system status data
+    ROVMAV_HEALTH = cs.header.frame_id; 
 
-        current_velo(X_VEL) = cs.twist.twist.linear.x; // UNTIS: m/s
-        current_velo(Y_VEL) = cs.twist.twist.linear.y; // UNTIS: m/s
-        current_velo(Z_VEL) = cs.twist.twist.linear.z; // UNTIS: m/s
+    // LINEAR odom data
+    current_pose(X) = cs.pose.pose.position.x; // UNITS: m
+    current_pose(Y) = cs.pose.pose.position.y; // UNITS: m
+    current_pose(Z) = cs.pose.pose.position.z; // UNITS: m
 
-        current_pose(THX) = cs.pose.pose.orientation.x; // UNITS: deg
-        current_pose(THY) = cs.pose.pose.orientation.y; // UNITS: deg
+    current_velo(X_VEL) = cs.twist.twist.linear.x; // UNTIS: m/s
+    current_velo(Y_VEL) = cs.twist.twist.linear.y; // UNTIS: m/s
+    current_velo(Z_VEL) = cs.twist.twist.linear.z; // UNTIS: m/s
+
+
+    // ANGULAR odom data
+    current_pose(THX) = cs.pose.pose.orientation.x; // UNITS: deg
+    current_pose(THY) = cs.pose.pose.orientation.y; // UNITS: deg
+    if (abs(desired_pose(THZ) - cs.pose.pose.orientation.z) < abs(desired_pose(THZ) - cs.pose.pose.orientation.w)) {
         current_pose(THZ) = cs.pose.pose.orientation.z; // UNITS: deg
-
-        current_velo(X_THVEL) = cs.twist.twist.angular.x; // UNTIS: deg/s
-        current_velo(Y_THVEL) = cs.twist.twist.angular.y; // UNTIS: deg/s
-        current_velo(Z_THVEL) = cs.twist.twist.angular.z; // UNTIS: deg/s
     }
+    else {
+        current_pose(THZ) = cs.pose.pose.orientation.w; // UNITS: deg
+    }
+
+    current_velo(X_THVEL) = cs.twist.twist.angular.x; // UNTIS: deg/s
+    current_velo(Y_THVEL) = cs.twist.twist.angular.y; // UNTIS: deg/s
+    current_velo(Z_THVEL) = cs.twist.twist.angular.z; // UNTIS: deg/s
 }
+
+// only get called from ROSHUM node on system byte change
+bool pid_control_action(blue_rov_custom_integration::control_pid::Request &req, blue_rov_custom_integration::control_pid::Response &res) {
+    PID_ON = req.PID_on;
+    PID_OFF = req.PID_off;
+    NEW_TRAJ = req.New_Traj;
+
+    res.pid_healthy = true;
+
+    return true;
+}
+
 
 
 

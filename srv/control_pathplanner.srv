@@ -1,6 +1,5 @@
 bool ask_if_new_path_needed
 bool cv_said_new_path
-bool plot_traj
 ---
 bool need_new_path
 bool pp_healthy

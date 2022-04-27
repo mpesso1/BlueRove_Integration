@@ -4,13 +4,13 @@ DATE:  APRIL 6th, 2022
 AUTHOR: MASON PESSON
 """
 
-from doctest import master #??
 from pymavlink import mavutil,mavwp
 import time
 import sys
 import keyboard
 from pymavlink.quaternion import QuaternionBase
 import math
+
 
 
 """
@@ -83,6 +83,11 @@ class ROVMAV(object):
 
         self.startup_ONS = False
 
+        self.MODE_ONS = True
+
+        self.Manual_overide = False
+
+        self.ARM_ONS = True
 
     def acknowledge_command(self):
         """
@@ -90,9 +95,10 @@ class ROVMAV(object):
             acknowledges that the comman that was just sent was recieved.
         """
         ack_msg = self.master.recv_match(type='COMMAND_ACK', blocking=True).to_dict()
-        print(ack_msg)
-        print(mavutil.mavlink.MAVLINK_MSG_ID_SET_MODE)
-        print(mavutil.mavlink.enums['MAV_RESULT'][ack_msg['result']].description)
+        print("Command Successful")
+        #print(ack_msg)
+        #print(mavutil.mavlink.MAVLINK_MSG_ID_SET_MODE)
+        #print(mavutil.mavlink.enums['MAV_RESULT'][ack_msg['result']].description)
 
 
     def view_message_loop(self,msg=None,forthismanyiterations=0,atthisrate=0,stopafterone=False,returndata=False):
@@ -161,7 +167,7 @@ class ROVMAV(object):
             return output
 
 
-    def view_message(self,msg=None,returndata=False):
+    def view_message(self,msg=None,returndata=False,display_output=True):
         """
         VIEW MESSAGES   NOTE: will NOT loop
             By default a server communicating on a Mavlink channel will broadcast a specific set of mssages.  This fuction will print those messages to the terminal.
@@ -206,15 +212,17 @@ class ROVMAV(object):
                 - Print to terminal MAVLINK messages being 
                 - tp
         """
+        output = None
         try:
             output = self.master.recv_match(type=msg).to_dict()
-            print(output) # need t comment this out when actually implimenting
+            if display_output:
+                print(output) # need t comment this out when actually implimenting
         except:
             pass
-        if returndata:
+        if returndata and output != None:
             return output
     
-    def request_message_interval(self,msgid,atthisfrequency=10,msg=None): # Default is 10 messages per second
+    def request_message_interval(self,msgid,atthisfrequency=10,msg=None,display_interval=True): # Default is 10 messages per second
         """
         REQUEST MESSAGE --> NOTE: you are actually also setting the frequency at which the message gets sent... this is mportant
             If message is not appearing when asking for it in view_message() then you me need to request autopilot to broadcast the message.
@@ -244,7 +252,8 @@ class ROVMAV(object):
                 0) # Target address of message stream (if message has target address fields). 0: Flight-stack default (recommended), 1: address of requestor, 2: broadcast.    
         #self.acknowledge_command()
         #self.view_message(msg)
-        self.get_message_interval(msgid)
+        if display_interval:
+            self.get_message_interval(msgid)
 
         if msg != None:
             print('looking for message... if not appearing after sometime then message is unavailable now')
@@ -360,7 +369,10 @@ class ROVMAV(object):
             #mavutil.mavfile.set_mode(self.master,'GUIDED',0,0)
 
             # Wait for ACK command
+            print("mode change")
             self.acknowledge_command()
+
+            self.current_mode = mode
 
         # Check if mode is available
         else:
@@ -538,14 +550,36 @@ class ROVMAV(object):
 
     def INIT_SHUTDOWN_withkey(self,key):
         if keyboard.is_pressed(key) and self.startup_ONS:
+            time.sleep(.5)
             self.set_mode('POSHOLD')
-            self.disarm_rov
+            self.disarm_rov()
             self.startup_ONS = False
             self.system_armed = False
             time.sleep(.1)
 
+    def MODE_CHANGE_ONS_withkey(self,key):
+        if keyboard.is_pressed(key) and self.MODE_ONS:
+            self.Manual_overide = True
+            self.MODE_ONS = False
+
+    def MODE_CHANGE_RELEASE_ONS_withkey(self,key):
+        if keyboard.is_pressed(key) and not self.MODE_ONS:
+            self.Manual_overide = False
+            self.MODE_ONS = True
+
+    def MODE_ONS_RESET_withkey(self,key):
+        if keyboard.is_pressed(key) and not self.MODE_ONS:
+            self.MODE_ONS = True
+
+    def INIT_OFFSET_withkey(self,key):
+        if keyboard.is_pressed(key):
+            print("mason")
+            return True
+        else: 
+            return False
+
 # Need to make it act as a stream.. or take into account each case... use switch statements
-    def keyboard_controlls(self,pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,letsride=True):
+    def keyboard_controlls(self,pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,pid_thrust_yaw=0,letsride=True):
         """
         KEYBOARD TO THRUST MAPPING
             Mapping:
@@ -563,16 +597,37 @@ class ROVMAV(object):
                     - defines if the bluerov will be completing a trajectory
 
         """
-        thruster_power = 75
+        pid_thrust_x = int(pid_thrust_x)
+        pid_thrust_y = int(pid_thrust_y)
+        pid_thrust_z = int(pid_thrust_z)
+        pid_thrust_yaw = int(pid_thrust_yaw)
+
+        thruster_power = 100
         thruster_nominal = 1500
+        thruster_positive_deadband = 20
+        thruster_negative_deadband = -20
 
         # Safety check on pid values not exceeding known maximum wanted thrust
+        
         if pid_thrust_x > 150:
             pid_thrust_x = 150
         if pid_thrust_y > 150:
             pid_thrust_y = 150
         if pid_thrust_z > 150:
             pid_thrust_z = 150
+        if pid_thrust_yaw > 150:
+            pid_thrust_yaw = 150
+
+        if pid_thrust_x < -150:
+            pid_thrust_x = -150
+        if pid_thrust_y < -150:
+            pid_thrust_y = -150
+        if pid_thrust_z < -150:
+            pid_thrust_z = -150
+        if pid_thrust_yaw < -150:
+            pid_thrust_yaw = -150
+
+
 
         if keyboard.is_pressed("space") or letsride:
 
@@ -581,39 +636,43 @@ class ROVMAV(object):
             elif keyboard.is_pressed("s"):
                 self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power*-1)
             else:
-                self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+pid_thrust_x)
+                if pid_thrust_x == abs(pid_thrust_x): # positive thrust, positive deadband
+                    self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal + thruster_positive_deadband + pid_thrust_x)
+                else:
+                    self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal + thruster_negative_deadband + pid_thrust_x)                    
                 
             if keyboard.is_pressed("d"):
                 self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power)
             elif keyboard.is_pressed("a"):
                 self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power*-1)
             else:
-                self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal)
-                
+                if pid_thrust_yaw == abs(pid_thrust_yaw): # positive thrust, positive deadband
+                    self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal + thruster_positive_deadband + pid_thrust_yaw)
+                else: 
+                    self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal + thruster_negative_deadband + pid_thrust_yaw)                
 
             if keyboard.is_pressed("l"):
                 self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power)
             elif keyboard.is_pressed("."):
                 self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power*-1)
             else:
-                self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+pid_thrust_z)
+                if pid_thrust_z == abs(pid_thrust_z): # positive thrust, positive deadband
+                    self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal + thruster_positive_deadband + pid_thrust_z)
+                else:
+                    self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal + thruster_negative_deadband + pid_thrust_z)                
                 
 
-            if keyboard.is_pressed(","):
+            if keyboard.is_pressed("/"):
                 self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+thruster_power)
-            elif keyboard.is_pressed("/"):
+            elif keyboard.is_pressed(","):
                 self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+thruster_power*-1)
             else:
-                self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal+pid_thrust_y)
-                
+                if pid_thrust_y == abs(pid_thrust_y): # positive thrust, positive deadband
+                    self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal + thruster_positive_deadband + pid_thrust_y)
+                else:
+                    self.set_rc_channel_pwm(self.rc_channel['vy'],thruster_nominal + thruster_negative_deadband + pid_thrust_y)
 
-            
-            if keyboard.is_pressed('1'):
-                self.arm_rov()
-
-            if keyboard.is_pressed('2'):
-                self.disarm_rov()
-        
+                    
 
     def set_target_attitude(self,roll, pitch, yaw):
         """ Sets the target attitude while in depth-hold mode.
@@ -1015,13 +1074,46 @@ if __name__ == "__main__":
     """
 
     rovmav = ROVMAV()
-    #rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,100)
+
     rovmav.set_mode('STABILIZE')
-    time.sleep(2)
+
     rovmav.arm_rov()
-    rovmav.test_yaw()
-    #rovmav.view_message_loop('AHRS2')
-    
+    #rovmav.disarm_rov()
+
+    rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000)
+    rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000)
+
+    update_req = 0
+    while True:
+        
+        linear_pos = rovmav.view_message('LOCAL_POSITION_NED',returndata=True,display_output=False)
+        angular_pose = rovmav.view_message('ATTITUDE',returndata=True,display_output=False)
+        #if linear_pos != None:
+            #print(linear_pos["x"])
+        #if angular_pose != None:
+         #   print(angular_pose["yaw"])
+        rovmav.keyboard_controlls()
+        if keyboard.is_pressed('q'):
+            break
+        update_req += 1
+    #
+    time.sleep(1)
+    rovmav.disarm_rov()
+    #rovmav.set_mode('POSHOLD')
+"""
+    while True:
+        rovmav.view_message('ATTITUDE')
+        rovmav.keyboard_controlls()
+        if keyboard.is_pressed('q'):
+            break
+
+
+    time.sleep(1)
+    rovmav.disarm_rov()
+"""
+    #rovmav.manual_control_loop()
+
+
     #rovmav.set_mode('GUIDED')
     #rovmav.view_message_loop('HEARTBEAT')
     #rovmav.set_home_position(0,0,76,startatcurrent=False)

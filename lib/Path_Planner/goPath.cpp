@@ -84,7 +84,9 @@ root::MeanTraj::~MeanTraj(){
 
 // Define each DOF w/ B.C.s -------------------------------------------
 void root::MeanTraj::add_DOF(float a, float v0, float p0, float pf, int ForThisDOF, bool ocv) {
-
+    if (pf < p0) {
+        a = a*-1;
+    }
     // Input parameters / B.C.s ---------------------
     init_parameter(ACCEL,ForThisDOF) = a;
     init_parameter(V0,ForThisDOF) = v0;
@@ -172,7 +174,7 @@ void root::MeanTraj::update_accel() {
 void root::MeanTraj::define_states() {
     float time_step=0;
     int i=0;
-    while (time_step < max_time+.01) {
+    while (time_step < max_time+.00001) {
         for (int j=0; j<ocv_size; j++) {
             mean_pos(i,j) = init_parameter(ACCEL,j)*pow(time_step,2)/2 + init_parameter(V0,j)*time_step + init_parameter(P0,j);
             mean_vel(i,j) = init_parameter(ACCEL,j)*time_step + init_parameter(V0,j);
@@ -240,7 +242,7 @@ void root::MeanTraj::add_ocv(int index) {
 
 
 // Declare optimization variables -------------------------------------
-void root::MeanTraj::declare_optimization() { // Need to get rid of this step... It is unecessary as mean_traj is just acting as a place holder. In other words when I am defining the states I should be doing this as well
+void root::MeanTraj::declare_optimization() {
     for (int i=0;i<=steps;i++) {
         mag_ocv(0,i) = sqrt(pow(mean_vel(i,0),2)+pow(mean_vel(i,1),2)+pow(mean_vel(i,2),2));
         for (int j=0;j<ocv_size;j++) {
@@ -256,7 +258,7 @@ void root::MeanTraj::declare_optimization() { // Need to get rid of this step...
             final_vel(i,j) = mean_vel(i,j); // (ocv,s1)
         }    
     }
-    check_pos = final_pos;
+
 }
 // --------------------------------------------------------------------
 
@@ -279,7 +281,7 @@ void root::MeanTraj::update_optimizaion() {
     }
     check_pos = final_pos;
 
-    update_g(1,.5);
+    update_g(.4,1);
 }
 // --------------------------------------------------------------------
 
@@ -295,28 +297,29 @@ void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,
         obs(z,1) = obj_y[z];
         obs(z,2) = obj_z[z];
     }
-    update_g(1,.5);
+    if (obs.rows() != 0) {
+        update_g(.4,1);
 
 
-    for (int i=0;i<500;i++) { // number of iteration of optimizaion.  This needs a new criterion to define when it finishes
-        final_pos = final_pos - (sensitivity[0])*Kp*(sensitivity[1]*Kp_inv*(final_pos-mean_pos) + g_pos.transpose());
-        final_vel = final_vel - (sensitivity[0])*Kv*(sensitivity[1]*Kv_inv*(final_vel-mean_vel) + g_vel.transpose());
-        
-        /*
-        if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
-            std::cout << final_pos.transpose() << std::endl;
-        }
-        */
-        if (i == 1 || i == 3 || i == 5 || i == 7 || i == 9 || i == 11 || i == 13) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
-            std::cout << final_pos.transpose() << std::endl;
-        }
-        
-        if (final_pos.isApprox(check_pos,.00000001)) {
-            //std::cout << i << std::endl;
-            break;
-        }
+        for (int i=0;i<1000;i++) { // number of iteration of optimizaion.  This needs a new criterion to define when it finishes
+            final_pos = final_pos - (sensitivity[0])*Kp*(sensitivity[1]*Kp_inv*(final_pos-mean_pos) + g_pos.transpose());
+            final_vel = final_vel - (sensitivity[0])*Kv*(sensitivity[1]*Kv_inv*(final_vel-mean_vel) + g_vel.transpose());
+            
 
-        update_optimizaion();
+            if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
+                std::cout << final_pos.transpose() << std::endl;
+            }
+            if (i == 1 || i == 3 || i == 5 || i == 7 || i == 9 || i == 11 || i == 13) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
+                std::cout << final_pos.transpose() << std::endl;
+            }
+            
+            if (final_pos.isApprox(check_pos,.00001)) {
+                // std::cout << "mason" << std::endl;
+                break;
+            }
+
+            update_optimizaion();
+        }
     }
 }
 // --------------------------------------------------------------------
@@ -330,12 +333,12 @@ void root::MeanTraj::update_g(float radius, float scale_error) {
         for (int k=0;k<obs.rows();k++) {
             for (int j=0;j<ocv_size;j++) {
                 del_c(j) = obs(k,j) - final_pos(i,j); // vector computed distance between object and robot state(i).  Both vectors are taken from the robots initial position
-                if (del_c(j) < radius && del_c(j) > 0) {
+                if (del_c(j) < radius && del_c(j) >= 0) {
                     //std::cout << "positive  ";
                     //std:: cout << i << std::endl;
                     del_c(j) = scale_error*(radius-del_c(j));
                 }
-                else if (del_c(j) > -radius && del_c(j) < 0) {
+                else if (del_c(j) > -radius && del_c(j) <= 0) {
                     //std::cout << "negative  ";
                     //std:: cout << i << std::endl;
                     del_c(j) = -scale_error*(radius+del_c(j));
