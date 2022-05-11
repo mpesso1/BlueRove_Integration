@@ -13,6 +13,8 @@ from std_msgs.msg import Byte
 
 from pymavlink_interface import ROVMAV, keyboard, mavutil
 
+import time
+
 from blue_rov_custom_integration.srv import byte_update, byte_updateResponse
 
 """
@@ -75,7 +77,7 @@ def int_to_binary(data):        # Helper function to convert the sytem number to
     return '{0:07b}'.format(data)
 
 
-system_state_bit_array = string_byte_to_array()
+system_state_bit_array = string_byte_to_array(system_state_byte)
 system_state_num = array_to_num(system_state_bit_array)
 
 
@@ -114,7 +116,7 @@ def RESET_SYSTEM_withkey(key):
 def RESET_system_check():
     global system_state_bit_array
     if system_state_bit_array[bitmap_enum["RESET"]]:
-        system_state_num = 0;
+        system_state_num = 0
         system_state_byte = int_to_binary(system_state_num)
         system_state_bit_array = string_byte_to_array(system_state_byte)
         system_state_bit_array[bitmap_enum["RESET"]] = 0
@@ -130,6 +132,7 @@ def rc_overide(data):
     global PID_THRUST_YAW
     global MODE
     global system_state_byte, system_state_num, system_state_bit_array
+    global reset_ONS
 
     """
     The PID node is responsible for determining the mode the robot should be in 
@@ -151,16 +154,30 @@ def rc_overide(data):
 
         # PID thrust data
         # Regardless of the data being recevied and stored in these variable. This data will not be sent over to the Bluerov unless other system critia is met
-        PID_THRUST_X = data.pose.pose.position.x
-        PID_THRUST_Y = data.pose.pose.position.y
-        PID_THRUST_Z = data.pose.pose.position.z
-        PID_THRUST_YAW = data.pose.pose.orientation.z
+
+        if system_state_bit_array[bitmap_enum['MODE']] == 1:
+            PID_THRUST_X = data.pose.pose.position.x
+            PID_THRUST_Y = data.pose.pose.position.y
+            PID_THRUST_Z = data.pose.pose.position.z
+            PID_THRUST_YAW = data.pose.pose.orientation.z
+        else:
+            PID_THRUST_X = 0
+            PID_THRUST_Y = 0
+            PID_THRUST_Z = 0
+            PID_THRUST_YAW = 0
 
 
-    if data.header.seq == 1:
-        print("WAYPOINT_REACHED")
-        system_state_bit_array[bitmap_enum["RESET"]] = 1
 
+    # print("x: ", PID_THRUST_X)
+    # print("Y: ", PID_THRUST_Y)
+    # print("Z: ", PID_THRUST_Z)
+    # print("YAW: ", PID_THRUST_YAW)
+
+    if data.pose.pose.orientation.x == 1:
+        reset_ONS = True
+
+
+reset_ONS = False
 
 rospy.init_node("ROSMAV")       # Create Node
 
@@ -199,8 +216,8 @@ def update_angular_offset(offset_yaw):      # Store yaw offset data into global 
     OFFSET_YAW = offset_yaw
 
 
-rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000,display_interval=False)        # Initial requenst to the ROV for ATTITUDE data to be sent at a spicific rate
-rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000,display_interval=False)      # Initial reqiuest to the ROV for LOCAL_POSITION_NED data to be sent at a specific rate
+rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,11,display_interval=False)        # Initial requenst to the ROV for ATTITUDE data to be sent at a spicific rate
+rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,11,display_interval=False)      # Initial reqiuest to the ROV for LOCAL_POSITION_NED data to be sent at a specific rate
 
 
 update_message_request = 0      # message interval counter which is used to keep track of when a message interval request needs to be sent
@@ -211,6 +228,20 @@ ROSMAV control loop.
     Interface to the pymavlink module wich allows communication with the ROV.
 """
 while not rospy.is_shutdown():
+
+    if reset_ONS:
+        # print("WAYPOINT_REACHED")
+        # rovmav.set_mode('POSHOLD')
+        # print('wp reached mode set to poshold')
+        # time.sleep(1)
+        # rovmav.set_mode('STABILIZE')
+        # print('wp reached mode chaged to stabilize')
+        # print('now the reset sequence begins')
+        rovmav.keyboard_controlls(pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,pid_thrust_yaw=0,letsride=True)
+        rovmav.keyboard_controlls(pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,pid_thrust_yaw=0,letsride=True)
+        system_state_bit_array[bitmap_enum["RESET"]] = 1
+
+        reset_ONS = False
 
     RESET_system_check() # Check if system bytes RESET bit has gone high.  If so, continue with reset sequence... setting system byte to 0
    
@@ -232,7 +263,7 @@ while not rospy.is_shutdown():
 
             if update_message_request >= 50:
 
-                #rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000,display_interval=False)        # Updated request for ATTITUDE message to be sent at a specific rate 
+                rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,11,display_interval=False)        # Updated request for ATTITUDE message to be sent at a specific rate 
                 #rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000,display_interval=False)      # Updated request for LOCAL_POSITION_NED to be sent at a specific rate
                 update_message_request=0
 
@@ -260,9 +291,9 @@ while not rospy.is_shutdown():
                 odomdata.twist.twist.linear.y = linear_pos["vy"]  # UNITS: m/s
                 odomdata.twist.twist.linear.z = linear_pos["vz"]  # UNITS: m/s
 
-                #print("X: ",odomdata.pose.pose.position.x)
-                #print("Y: ",odomdata.pose.pose.position.y)
-                #print("Z: ",odomdata.pose.pose.position.z)
+                # print("X: ",odomdata.pose.pose.position.x)
+                # print("Y: ",odomdata.pose.pose.position.y)
+                # print("Z: ",odomdata.pose.pose.position.z)
 
                 #print(odomdata.twist.twist.linear.x)
 
@@ -279,19 +310,23 @@ while not rospy.is_shutdown():
                 odomdata.pose.pose.orientation.y = angular_pose["pitch"]   # UNITS: deg
                 odomdata.pose.pose.orientation.z = yaw_offset(angular_pose["yaw"])  # UNITS: deg       rad  [0 - 2pi]
                 odomdata.pose.pose.orientation.w = angular_pose["yaw"]  # UNITS: deg    rad [-pi - pi]
-                #print("YAW: ",odomdata.pose.pose.orientation.z)
 
+                # print("YAW_Z: ",odomdata.pose.pose.orientation.z)
+                # print("YAW_W: ",odomdata.pose.pose.orientation.w)
 
             rovmav.MODE_CHANGE_ONS_withkey("9")     # Manually set the ROV into Stabilize mode blocking any output from the pid.  NOTE: Can only be set if system is healthy
 
             update_message_request += 1
 
 
+            publish_odometry.publish(odomdata)
+
+
         else:
             odomdata.header.frame_id = "UNHEALTHY"      # ROSMAV communicates to pid that it is unhealthy.. NOTE: This data is used as a handshake between ROSMAV and the pid for the pid to initiate
 
 
-        publish_odometry.publish(odomdata)
+        
 
 
     if not rovmav.system_armed and system_state_num > 0:        # Part of the disarm sequence check
@@ -325,8 +360,9 @@ while not rospy.is_shutdown():
 
 
     if system_state_num == 31: # 0011111 --> system must be healthy and in STABILIZE mode inorder to move  NOTE: Ca become 31 by either Manually setting of if pid initiates autonomous rc override
-        # rovmav.keyboard_controlls(pid_thrust_x=PID_THRUST_X,pid_thrust_y=PID_THRUST_Y,pid_thrust_z=PID_THRUST_Z,letsride=True)
-        rovmav.keyboard_controlls(letsride=True)
+        rovmav.keyboard_controlls(pid_thrust_x=PID_THRUST_X,pid_thrust_y=PID_THRUST_Y,pid_thrust_z=PID_THRUST_Z,pid_thrust_yaw=PID_THRUST_YAW,letsride=True)
+    else:
+        rovmav.keyboard_controlls(pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,pid_thrust_yaw=0,letsride=False)
 
 
     publish_state.publish(array_to_num(system_state_bit_array))     # Communicate system changes to ROSHUM

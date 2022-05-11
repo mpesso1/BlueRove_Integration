@@ -102,7 +102,7 @@ bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
 
     // PID id time domain
     controller_output = dot(proportional_gain,(ds - cs)) + dot(integral_gain,integral_error) + dot(derivative_gain,(old_error-(ds - cs))/dt);
-    std::cout << "Integral Thrust: \n" << dot(integral_gain,integral_error) << std::endl;
+    //std::cout << "Integral Thrust: \n" << dot(integral_gain,integral_error) << std::endl;
 
     // derivative error computation
     old_error = ds - cs;
@@ -122,12 +122,23 @@ bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
 
 // Eigen library computation defining is state was reached
 bool pid::rosPID::_stateIsWithinTolerance(float tolerance, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> current,Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> desired) {
-    if (current.isApprox(desired,tolerance)) {
+    if (abs(desired(0) - current(0)) <= tolerance && abs(desired(1) - current(1)) <= tolerance && abs(desired(2) - current(2)) <= tolerance && abs(desired(5) - current(5)) <= tolerance+.1) {
+        // std::cout << "Within tolerence according to pid library\n";
         return true;
     }
     else {
+        // std::cout << "X: " << abs(desired(0) - current(0)) <<  std::endl;
+        // std::cout << "Y: " << abs(desired(1) - current(1)) <<  std::endl;
+        // std::cout << "Z: " << abs(desired(2) - current(2)) << std::endl;
+        // std::cout << "THZ: " << abs(desired(5) - current(5)) <<  std::endl;
         return false;
     }
+    // if (current.isApprox(desired,tolerance)) {
+    //     return true;
+    // }
+    // else {
+    //     return false;
+    // }
 }
 
 // dot product

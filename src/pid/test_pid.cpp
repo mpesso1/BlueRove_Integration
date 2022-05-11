@@ -75,13 +75,13 @@ void odom_callback(const nav_msgs::Odometry& cs) {
 int main(int argc, char** argv) {
 
     // PID GAIN -- (x, y, z, thx, thy, thz) ---------------------------------
-    pose_gain << 40, 40, 60, .01, .01, 40;
-    inte_gain << 9000000, 9000000, 10000000, .0, .0, 9000000;
+    pose_gain << 160, 160, 60, .01, .01, 40;
+    inte_gain << 9000000, 9000000, 100000000, .0, .0, 9000000;
     deriv_gain << .0, .0, .0, .0, .0, .0;
 
     
 
-    desired_pose(X) = 0;
+    desired_pose(X) = 10;
     desired_pose(Y) = 0;
     desired_pose(Z) = 0;
     desired_pose(THX) = 0;

@@ -96,6 +96,8 @@ namespace root {
         public:
             enum INPUTS {ACCEL,V0,P0,Pf};
 
+            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> thz_init;
+
             MeanTraj(int,int,int); 
             // Constructor, allocates space in memory for class
 
@@ -159,7 +161,7 @@ namespace root {
 
             Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> trajectory_translational();
 
-            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> trajectory_angular();
+            Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> trajectory_orientation();
     
     };
 }

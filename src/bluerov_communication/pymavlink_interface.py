@@ -64,6 +64,7 @@ class ROVMAV(object):
                 - If we are not getting heartbeat messages then we are not recieving any other messages
         """
         #master.mav.heartbeat_send(mavutil.mavlink.MAV_TYPE_GCS, mavutil.mavlink.MAV_AUTOPILOT_INVALID,0,0,0)
+
         self.master.wait_heartbeat()
         print("Heartbeat from system (system %u component %u)" % (self.master.target_system, self.master.target_component))
 
@@ -602,10 +603,10 @@ class ROVMAV(object):
         pid_thrust_z = int(pid_thrust_z)
         pid_thrust_yaw = int(pid_thrust_yaw)
 
-        thruster_power = 100
+        thruster_power = 140
         thruster_nominal = 1500
-        thruster_positive_deadband = 20
-        thruster_negative_deadband = -20
+        thruster_positive_deadband = 0
+        thruster_negative_deadband = -0
 
         # Safety check on pid values not exceeding known maximum wanted thrust
         
@@ -647,9 +648,9 @@ class ROVMAV(object):
                 self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal+thruster_power*-1)
             else:
                 if pid_thrust_yaw == abs(pid_thrust_yaw): # positive thrust, positive deadband
-                    self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal + thruster_positive_deadband + pid_thrust_yaw)
+                    self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal + 20 + pid_thrust_yaw)
                 else: 
-                    self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal + thruster_negative_deadband + pid_thrust_yaw)                
+                    self.set_rc_channel_pwm(self.rc_channel['yaw'],thruster_nominal -20  + pid_thrust_yaw)                
 
             if keyboard.is_pressed("l"):
                 self.set_rc_channel_pwm(self.rc_channel['vz'],thruster_nominal+thruster_power)
@@ -1075,30 +1076,30 @@ if __name__ == "__main__":
 
     rovmav = ROVMAV()
 
-    rovmav.set_mode('STABILIZE')
+    rovmav.set_mode('POSHOLD')
 
-    rovmav.arm_rov()
-    #rovmav.disarm_rov()
+    # rovmav.arm_rov()
+    # #rovmav.disarm_rov()
 
     rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000)
     rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000)
-
-    update_req = 0
-    while True:
+    rovmav.view_message_loop('ATTITUDE')
+    # update_req = 0
+    # while True:
         
-        linear_pos = rovmav.view_message('LOCAL_POSITION_NED',returndata=True,display_output=False)
-        angular_pose = rovmav.view_message('ATTITUDE',returndata=True,display_output=False)
-        #if linear_pos != None:
-            #print(linear_pos["x"])
-        #if angular_pose != None:
-         #   print(angular_pose["yaw"])
-        rovmav.keyboard_controlls()
-        if keyboard.is_pressed('q'):
-            break
-        update_req += 1
-    #
-    time.sleep(1)
-    rovmav.disarm_rov()
+    #     linear_pos = rovmav.view_message('LOCAL_POSITION_NED',returndata=True,display_output=False)
+    #     angular_pose = rovmav.view_message('ATTITUDE',returndata=True,display_output=False)
+    #     #if linear_pos != None:
+    #         #print(linear_pos["x"])
+    #     #if angular_pose != None:
+    #      #   print(angular_pose["yaw"])
+    #     rovmav.keyboard_controlls()
+    #     if keyboard.is_pressed('q'):
+    #         break
+    #     update_req += 1
+    # #
+    # time.sleep(1)
+    # rovmav.disarm_rov()
     #rovmav.set_mode('POSHOLD')
 """
     while True:

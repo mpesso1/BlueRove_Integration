@@ -86,6 +86,8 @@ with open('/home/mason/catkin_ws/src/blue_rov_custom_integration/src/human_inter
             print("waypoint definition does not contain 4 inputs")
     TOTAL_WAYPOINTS = num_waypoints
 
+print(YAW_WP)
+
 if TOTAL_WAYPOINTS == 0: 
     logging.warning("[ROSHUM]:  NO MISSION SET --> waypoint text file was defined as empty.")
     NO_MORE_WAYPOINTS = True

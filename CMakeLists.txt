@@ -55,9 +55,9 @@ add_executable(pid_test src/pid/test_pid.cpp)
 add_executable(Controller_node src/pid/pp_pid.cpp)
 
 
-target_link_libraries(Controller_node ${catkin_LIBRARIES} pid_lib)
-target_link_libraries(pp_node ${catkin_LIBRARIES} pp_lib)
-target_link_libraries(pid_test ${catkin_LIBRARIES} pid_lib)
+target_link_libraries(Controller_node PUBLIC ${catkin_LIBRARIES} pid_lib)
+target_link_libraries(pp_node PUBLIC ${catkin_LIBRARIES} pp_lib)
+target_link_libraries(pid_test PUBLIC ${catkin_LIBRARIES} pid_lib)
 #target_link_libraries(tester_node ${catkin_LIBRARIES})
 
 

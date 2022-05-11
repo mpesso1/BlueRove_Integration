@@ -34,6 +34,8 @@ pp_goPath
 using namespace std;
 using namespace root;
 
+#define PI 3.14159265
+
 // Waypoint / Final Goal Data
 bool NEED_NEW_WAYPOINT = true;// indication if we need new trajectory
 bool NEW_TRAJ = false; // boolian defining if new path is going to be generated
@@ -73,7 +75,7 @@ std::vector<float> objz;
 // Trajectory -----------------------------------------
 /* Will store the entire trajectories for both translational and rotational movement */;
 Eigen::Matrix<float,60+1, 3> path_trans;
-Eigen::Matrix<float,60+1, 3> path_angular; // currently need the amount of steps to be set to 60
+Eigen::Matrix<float,60+1, 1> path_angular; // currently need the amount of steps to be set to 60
 
 
 // Adds an object into the object array that gets iterated over while defining the trajectory
@@ -141,6 +143,7 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
         BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 4, false);
         BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, yaw_goal_wp, 5, false);
 
+        std::cout << "THIS is thz request: " << req.thz << std::endl;
 
         // Optimize trajectory based on object cordinates -----
         BlueRov.optimize(objx,objy,objz);
@@ -148,12 +151,19 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
 
         // Store trajectory -----------------------------------
         path_trans = BlueRov.trajectory_translational();
-        //path_angular = BlueRov.trajectory_angular();
+        path_angular = BlueRov.trajectory_orientation();
 
-        //ofstream myfile;
-        //myfile.open ("linear_path.txt");
-        //myfile << path_trans;
-        //myfile.close();
+
+        std::cout << path_trans << " --- ";
+        std::cout << path_angular << std::endl;
+
+        ofstream myfile;
+        myfile.open ("/home/mason/catkin_ws/src/blue_rov_custom_integration/src/Path_Planner/store.txt");
+        // myfile << "";
+        myfile << path_trans.transpose();
+        myfile << "MAOSN";
+        myfile << path_angular.transpose();
+        myfile.close();
         
 
         // Display trajectory ---------------------------------
@@ -169,17 +179,59 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
     STEP = STEP + 1;
 
     std::cout << "Sending desired pose from pp\n";
+
+
     // Send trajectory waypoint ---------------------------
-    res.x_way = path_trans(STEP,0);
+    res.x_way = path_trans(STEP,0); //sqrt(pow(path_trans(STEP,0),2) + pow(path_trans(STEP,1),2));
     res.y_way = path_trans(STEP,1);
     res.z_way = path_trans(STEP,2);
+
     res.thx_way = 0;
     res.thy_way = 0;
-    res.thz_way = atan2(path_trans(STEP,1),path_trans(STEP,2)); 
+
+    res.thz_way = path_angular(STEP,0);
+
+
+    // if (x_goal_wp == 0){
+    //     path_trans(STEP,0) = 0;
+    //     path_trans(STEP-1,0) = 0;
+    // }
+
+    // if (y_goal_wp == 0){
+    //     path_trans(STEP,1) = 0;
+    //     path_trans(STEP-1,1) = 0;
+    // }
+
+
+    // if (atan2(path_trans(STEP,1),path_trans(STEP,0)) != abs(atan2(path_trans(STEP,1),path_trans(STEP,0))) {
+    //     res.thz_way = (2*PI + atan2( path_trans(STEP,1), path_trans(STEP,0))) - .05; 
+    // }
+    // else {
+    //     res.thz_way = atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)); 
+    // }
+
+
+    // if (atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)) != abs(atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)))) {
+    //     res.thz_way = (2*PI + atan2( path_trans(STEP,1) - path_trans(STEP-1,1) , path_trans(STEP,0) - path_trans(STEP-1,0) )) - .05; 
+    // }
+    // else {
+    //     res.thz_way = atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)); 
+    // }
+
+
+    // res.thz_way = 3.14;
+
+
+    
+    std::cout << "Desired Angle: " << res.thz_way << std::endl;
+    std::cout << "Desired X: " << res.x_way << std::endl;
+    std::cout << "Desired Y: " << res.y_way << std::endl;
 
     if (STEP >= STEPS) {
+        std::cout << "\033[1;47m PATHPLANNER FINISHED SENDING FOR CURRENT WAYPOINT \033[m \n";
         NEED_NEW_WAYPOINT = true;
         res.pathcomplete = true;
+        STEP = 0;
     }
 
     return true;

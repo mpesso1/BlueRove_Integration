@@ -41,6 +41,9 @@ namespace pid {
         Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> derivative_gain;
 
         int DOF; // Degrees of Freedom
+          
+
+    public:
 
         // Intergral Storage
         Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> area_error;
@@ -48,9 +51,6 @@ namespace pid {
 
         // Derivative Storage
         Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> old_error;
-          
-
-    public:
         // Output of the PID
         Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> controller_output;
 

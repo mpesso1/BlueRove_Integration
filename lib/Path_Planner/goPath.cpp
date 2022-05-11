@@ -69,6 +69,9 @@ root::MeanTraj::MeanTraj(int DOF, int num_of_steps, int ocv) {
 
     check_pos.resize(steps+1,ocv_size);
     // -------------------------------------------
+
+    thz_init.resize(steps+1,1);
+
 }
 // --------------------------------------------------------------------
 
@@ -84,9 +87,25 @@ root::MeanTraj::~MeanTraj(){
 
 // Define each DOF w/ B.C.s -------------------------------------------
 void root::MeanTraj::add_DOF(float a, float v0, float p0, float pf, int ForThisDOF, bool ocv) {
+
+    // correction for radian circle loop
+    if (ForThisDOF == 5) {
+        if (abs(p0) != p0) {
+            if (abs(pf - (6.28318530718+p0)) < abs(pf - p0)) {
+                p0 = 6.28318530718+p0;
+            }
+        } else {
+            if (abs(pf - (-6.28318530718+p0)) < abs(pf - p0)) {
+                p0 = -6.28318530718+p0;
+            }
+        }
+    }
+
     if (pf < p0) {
         a = a*-1;
     }
+
+
     // Input parameters / B.C.s ---------------------
     init_parameter(ACCEL,ForThisDOF) = a;
     init_parameter(V0,ForThisDOF) = v0;
@@ -163,7 +182,7 @@ void root::MeanTraj::define_step() {
 
 // Update each DOF acceleration based on found DOF max time -----------
 void root::MeanTraj::update_accel() {
-    for (int i=0; i<DsOF-1;i++) {
+    for (int i=0; i<=DsOF-1;i++) {
         init_parameter(ACCEL,i) = 2/pow(max_time,2)*((init_parameter(Pf,i)-init_parameter(P0,i))-init_parameter(V0,i)*max_time);
     }
 }
@@ -174,11 +193,14 @@ void root::MeanTraj::update_accel() {
 void root::MeanTraj::define_states() {
     float time_step=0;
     int i=0;
-    while (time_step < max_time+.00001) {
+    while (time_step <= max_time+.00001) {
         for (int j=0; j<ocv_size; j++) {
             mean_pos(i,j) = init_parameter(ACCEL,j)*pow(time_step,2)/2 + init_parameter(V0,j)*time_step + init_parameter(P0,j);
             mean_vel(i,j) = init_parameter(ACCEL,j)*time_step + init_parameter(V0,j);
         }
+
+        thz_init(i,0) = init_parameter(ACCEL,5)*pow(time_step,2)/2 + init_parameter(V0,5)*time_step + init_parameter(P0,5);
+
         time_step+=step;
         i+=1;
     }
@@ -362,8 +384,11 @@ void root::MeanTraj::update_g(float radius, float scale_error) {
         if (mag_ocv(i) == 0) {
             mag_ocv(i) = 0.0001;
         }
-        g_pos.col(i) = IJ.transpose()*mag_ocv(i)*(I - unit_prime.col(i)*unit_prime.col(i).transpose())*del_c - c*pow(mag_ocv(i),-2)*(I - unit_prime.col(i)*unit_prime.col(i).transpose())*unit_dubprime.col(i);
-        g_vel.col(i) = IJ.transpose()*c*unit_prime.col(i);
+
+
+        g_pos.col(i) = I*mag_ocv(i)*(I - unit_prime.col(i)*unit_prime.col(i).transpose())*del_c - c*pow(mag_ocv(i),-2)*(I - unit_prime.col(i)*unit_prime.col(i).transpose())*unit_dubprime.col(i);
+        g_vel.col(i) = I*c*unit_prime.col(i);
+
 
     }
     /*
@@ -392,14 +417,16 @@ void root::MeanTraj::traj(int go) {
 
     if (go == 1) {
         std::cout << final_pos.transpose() << std::endl;
-        obs_plot.resize(obs.rows(),final_pos.transpose().cols());
-        for (int i=0;i<obs.rows();i++) {
-            obs_plot.row(i) = final_pos.transpose().row(1)*0;
-            for (int j=0;j<3;j++) {
-                obs_plot(i,j) = obs(i,j);
-        } 
-        }
-        std::cout << obs_plot << std::endl;
+        // obs_plot.resize(obs.rows(),final_pos.transpose().cols());
+        // for (int i=0;i<obs.rows();i++) {
+        //     obs_plot.row(i) = final_pos.transpose().row(1)*0;
+        //     for (int j=0;j<3;j++) {
+        //         obs_plot(i,j) = obs(i,j);
+        // } 
+        // }
+        std::cout << obs << std::endl;
+
+        std::cout << thz_init.transpose() << std::endl;
     }
 }
 // --------------------------------------------------------------------
@@ -469,6 +496,6 @@ Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> root::MeanTraj::trajectory_tr
     return final_pos;
 }
 
-Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> root::MeanTraj::trajectory_angular() {
-    return mean_pos;
+Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> root::MeanTraj::trajectory_orientation() {
+    return thz_init;
 }
