@@ -143,8 +143,6 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
         BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 4, false);
         BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, yaw_goal_wp, 5, false);
 
-        std::cout << "THIS is thz request: " << req.thz << std::endl;
-
         // Optimize trajectory based on object cordinates -----
         BlueRov.optimize(objx,objy,objz);
         cout << "PATH CREATED";
@@ -154,78 +152,35 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
         path_angular = BlueRov.trajectory_orientation();
 
 
-        std::cout << path_trans << " --- ";
+        std::cout << path_trans << " ";
         std::cout << path_angular << std::endl;
 
-        ofstream myfile;
-        myfile.open ("/home/mason/catkin_ws/src/blue_rov_custom_integration/src/Path_Planner/store.txt");
+        // ofstream myfile;
+        // myfile.open ("/home/mason/catkin_ws/src/blue_rov_custom_integration/src/Path_Planner/store.txt");
         // myfile << "";
-        myfile << path_trans.transpose();
-        myfile << "MAOSN";
-        myfile << path_angular.transpose();
-        myfile.close();
-        
-
-        // Display trajectory ---------------------------------
-        //""" Used for storing results in file system. Must use linux >> operator to redirect to results to desired file """ ; 
-        //BlueRov.traj(1);
-
-        // ----------------------------------------------------
-
+        // myfile << path_trans.transpose();
+        // myfile << "MAOSN";
+        // myfile << path_angular.transpose();
+        // myfile.close();
     }
 
 
     // Increment trajectory index -------------------------
     STEP = STEP + 1;
 
-    std::cout << "Sending desired pose from pp\n";
-
+    // std::cout << "Sending desired pose from pp\n";
 
     // Send trajectory waypoint ---------------------------
     res.x_way = path_trans(STEP,0); //sqrt(pow(path_trans(STEP,0),2) + pow(path_trans(STEP,1),2));
     res.y_way = path_trans(STEP,1);
     res.z_way = path_trans(STEP,2);
-
     res.thx_way = 0;
     res.thy_way = 0;
-
     res.thz_way = path_angular(STEP,0);
-
-
-    // if (x_goal_wp == 0){
-    //     path_trans(STEP,0) = 0;
-    //     path_trans(STEP-1,0) = 0;
-    // }
-
-    // if (y_goal_wp == 0){
-    //     path_trans(STEP,1) = 0;
-    //     path_trans(STEP-1,1) = 0;
-    // }
-
-
-    // if (atan2(path_trans(STEP,1),path_trans(STEP,0)) != abs(atan2(path_trans(STEP,1),path_trans(STEP,0))) {
-    //     res.thz_way = (2*PI + atan2( path_trans(STEP,1), path_trans(STEP,0))) - .05; 
-    // }
-    // else {
-    //     res.thz_way = atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)); 
-    // }
-
-
-    // if (atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)) != abs(atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)))) {
-    //     res.thz_way = (2*PI + atan2( path_trans(STEP,1) - path_trans(STEP-1,1) , path_trans(STEP,0) - path_trans(STEP-1,0) )) - .05; 
-    // }
-    // else {
-    //     res.thz_way = atan2(path_trans(STEP,1)-path_trans(STEP-1,1),path_trans(STEP,0)-path_trans(STEP-1,0)); 
-    // }
-
-
-    // res.thz_way = 3.14;
-
-
     
-    std::cout << "Desired Angle: " << res.thz_way << std::endl;
-    std::cout << "Desired X: " << res.x_way << std::endl;
-    std::cout << "Desired Y: " << res.y_way << std::endl;
+    // std::cout << "Desired Angle: " << res.thz_way << std::endl;
+    // std::cout << "Desired X: " << res.x_way << std::endl;
+    // std::cout << "Desired Y: " << res.y_way << std::endl;
 
     if (STEP >= STEPS) {
         std::cout << "\033[1;47m PATHPLANNER FINISHED SENDING FOR CURRENT WAYPOINT \033[m \n";
@@ -240,6 +195,9 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
 
 // only gets called whenever the system byte has changed and communicated through the ROSHUM node
 bool pp_control_action(blue_rov_custom_integration::control_pathplanner::Request &req, blue_rov_custom_integration::control_pathplanner::Response &res) {
+    if (req.going_to_need_new_wp) {
+        NEED_NEW_WAYPOINT = true;
+    }
     if (req.cv_said_new_path) {
         NEW_TRAJ = true;
         res.cv_enforced = true;
@@ -265,6 +223,14 @@ bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoi
     y_goal_wp = req.y;
     z_goal_wp = req.z;
     yaw_goal_wp = req.yaw;
+
+
+    // cout << "x_goal_wp:  " << x_goal_wp << endl;
+    // std::cout >> "y_goal_wp:  " >> y_goal_wp >> std::endl;
+    std::cout << "z_goal_wp:  " << z_goal_wp << std::endl;
+    // std::cout >> "yaw_goal_wp:  " >> yaw_goal_wp >> std::endl;
+
+
 
     if (req.ox == 0 && req.oy == 0 && req.oz == 0) {
         cout << " \n";

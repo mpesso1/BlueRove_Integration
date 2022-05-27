@@ -45,6 +45,16 @@ namespace pid {
 
     public:
 
+        float give_boost_ons = true;
+
+        float reduce_boost_ons = true;
+
+        float pz_ph;
+        
+        float area_error_ph;
+
+        void cut_pzgain(float, float, float);
+
         // Intergral Storage
         Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> area_error;
         Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> integral_error;
@@ -64,7 +74,10 @@ namespace pid {
         bool run_pid(float, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic>,Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic>, float, bool);
 
         // reset pid values
-        void reset_pid(bool);
+        void reset_pid(bool, bool);
+
+        //give boost to z
+        void give_boost(float, float, float, float);
 
         // check if within tolerence of desired state
         bool _stateIsWithinTolerance(float, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic>, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic>);

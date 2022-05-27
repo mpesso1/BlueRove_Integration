@@ -67,6 +67,9 @@ pid::rosPID::rosPID(int dof, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> 
 
     // Derivative error storage
     old_error = Eigen::Matrix<float,6,1>::Zero();
+
+
+    pz_ph = proportional_gain(2);
 }
 
 //Destructor
@@ -76,14 +79,46 @@ pid::rosPID::~rosPID() {
 
 
 // Reset PID integral and derivative storage if the desired pose is reached w/in tolerance... Should only reset values if the robot will not hold this position. i.e if it will hold position do not reset
-void pid::rosPID::reset_pid(bool reset) {
+void pid::rosPID::reset_pid(bool reset, bool keep_z) {
+    float inte_error_ph = integral_error(2);
+    float area_error_ph = area_error(2);
     if (reset) {
         integral_error = Eigen::Matrix<float,6,1>::Zero();
         area_error= Eigen::Matrix<float,6,1>::Zero();
         old_error = Eigen::Matrix<float,6,1>::Zero();
     }
+    if (keep_z) {
+        integral_error(2) = inte_error_ph;
+        area_error(2) = area_error_ph;
+    }
+
+    give_boost_ons = true;
 }
 
+
+void pid::rosPID::give_boost(float ds, float cs, float breakpoint, float PgainPush) {
+
+    if (ds >= breakpoint) {
+        if (cs <= breakpoint) {
+            proportional_gain(2) = proportional_gain(2) + PgainPush;
+        }
+    }
+    if (cs>=breakpoint) {
+        proportional_gain(2) = pz_ph;
+    }
+
+}
+
+
+void pid::rosPID::cut_pzgain(float ds, float cs, float temp_value) {
+    if (cs > ds) {
+        proportional_gain(2) = temp_value;
+        // area_error(2) = 0;
+    }
+    else {
+        proportional_gain(2) = pz_ph;
+    }
+}
 
 // PID computation that returns a boolean defining if the desired pose is within tolerance 
 bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> ds, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> cs, float tolerance, bool autoReset=false) {
@@ -95,14 +130,27 @@ bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
     if (cs.cols() > 1) {
         cs = cs.transpose();
     }
-    
+
+
+    // cut_pzgain(ds(2), cs(2), -76);
+
+
+    // give_boost(ds(2), cs(2), .25, 1000);
+
+
     // Integral error computation
     area_error = (ds - cs)*(dt); 
     integral_error = integral_error + area_error;
 
     // PID id time domain
-    controller_output = dot(proportional_gain,(ds - cs)) + dot(integral_gain,integral_error) + dot(derivative_gain,(old_error-(ds - cs))/dt);
+    controller_output = dot(proportional_gain,(ds - cs)) + dot(integral_gain,integral_error) - dot(derivative_gain,(old_error-(ds - cs))/dt);
     //std::cout << "Integral Thrust: \n" << dot(integral_gain,integral_error) << std::endl;
+
+    std::cout << "z gain: " << proportional_gain(2) << std::endl;
+
+
+    // std::cout << "intergral error: " << integral_error(2) << std::endl;
+    // std::cout << "area error: " << area_error(2) << std::endl;
 
     // derivative error computation
     old_error = ds - cs;
@@ -112,7 +160,7 @@ bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
 
     // Reset intergral and derivate storage automatically upon desired state being reached
     if (output && autoReset) {
-        pid::rosPID::reset_pid(autoReset);
+        pid::rosPID::reset_pid(autoReset, true);
     }
 
     return output;
@@ -122,7 +170,7 @@ bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
 
 // Eigen library computation defining is state was reached
 bool pid::rosPID::_stateIsWithinTolerance(float tolerance, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> current,Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dynamic> desired) {
-    if (abs(desired(0) - current(0)) <= tolerance && abs(desired(1) - current(1)) <= tolerance && abs(desired(2) - current(2)) <= tolerance && abs(desired(5) - current(5)) <= tolerance+.1) {
+    if (abs(desired(0) - current(0)) <= tolerance+.15 && abs(desired(1) - current(1)) <= tolerance+.15 && abs(desired(2) - current(2)) <= tolerance+.2 && abs(desired(5) - current(5)) <= tolerance+.1) {
         // std::cout << "Within tolerence according to pid library\n";
         return true;
     }

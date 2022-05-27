@@ -3,4 +3,5 @@
     <node pkg="blue_rov_custom_integration" type="Controller_node" name="Controller" output="screen" />
     <node pkg="blue_rov_custom_integration" type="ROSMAV.py" name="ROSMAV" output="screen" />
     <node pkg="blue_rov_custom_integration" type="ROSHUM.py" name="ROSHUM" output="screen" />
+    <node pkg="blue_rov_custom_integration" type="lawnmower.py" name="LawnMower" output="screen" />
 </launch>

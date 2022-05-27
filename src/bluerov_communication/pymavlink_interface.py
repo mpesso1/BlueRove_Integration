@@ -614,8 +614,8 @@ class ROVMAV(object):
             pid_thrust_x = 150
         if pid_thrust_y > 150:
             pid_thrust_y = 150
-        if pid_thrust_z > 150:
-            pid_thrust_z = 150
+        # if pid_thrust_z > 220:
+        #     pid_thrust_z = 220
         if pid_thrust_yaw > 150:
             pid_thrust_yaw = 150
 
@@ -623,8 +623,8 @@ class ROVMAV(object):
             pid_thrust_x = -150
         if pid_thrust_y < -150:
             pid_thrust_y = -150
-        if pid_thrust_z < -150:
-            pid_thrust_z = -150
+        # if pid_thrust_z < -220:
+        #     pid_thrust_z = -220
         if pid_thrust_yaw < -150:
             pid_thrust_yaw = -150
 
@@ -1076,28 +1076,34 @@ if __name__ == "__main__":
 
     rovmav = ROVMAV()
 
-    rovmav.set_mode('POSHOLD')
+    rovmav.set_mode('MANUAL')
 
     # rovmav.arm_rov()
-    # #rovmav.disarm_rov()
+    # rovmav.disarm_rov()
+    # rovmav.request_parameters_list()
 
-    rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000)
-    rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000)
-    rovmav.view_message_loop('ATTITUDE')
+    rovmav.request_parameter_value('GND_EXT_BUS')
+    rovmav.set_parameter_value(1,'GND_EXT_BUS')
+    rovmav.request_parameter_value('GND_EXT_BUS')
+
+    # rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000)
+    # rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000)
+    # rovmav.view_message_loop('SCALED_PRESSURE2')
     # update_req = 0
     # while True:
         
-    #     linear_pos = rovmav.view_message('LOCAL_POSITION_NED',returndata=True,display_output=False)
-    #     angular_pose = rovmav.view_message('ATTITUDE',returndata=True,display_output=False)
+    #     # linear_pos = rovmav.view_message('LOCAL_POSITION_NED',returndata=True,display_output=False)
+    #     # angular_pose = rovmav.view_message('ATTITUDE',returndata=True,display_output=False)
+    #     pressure = rovmav.view_message('SCALED_PRESSURE',returndata=True,display_output=False)
     #     #if linear_pos != None:
     #         #print(linear_pos["x"])
-    #     #if angular_pose != None:
-    #      #   print(angular_pose["yaw"])
+    #     if pressure != None:
+    #        print(pressure["press_abs"]*100/1000/9.81 - 14.7)
     #     rovmav.keyboard_controlls()
     #     if keyboard.is_pressed('q'):
     #         break
     #     update_req += 1
-    # #
+    #
     # time.sleep(1)
     # rovmav.disarm_rov()
     #rovmav.set_mode('POSHOLD')
@@ -1125,7 +1131,6 @@ if __name__ == "__main__":
 
     #rovmav.request_message()
     #rovmav.view_message_loop('LOCAL_POSITION_NED',atthisrate=0)
-    #rovmav.request_parameters_list()
     #rovmav.set_parameter_value(-10,'SURFACE_DEPTH')
     #rovmav.request_parameter_value('SURFACE_DEPTH')
 

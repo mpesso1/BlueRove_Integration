@@ -19,6 +19,8 @@ add_service_files (
   pathplanner_update_waypoint.srv
   byte_update.srv
   cv_action.srv
+  wpTrigger.srv
+  resetTrigger.srv
 )
 
 generate_messages(

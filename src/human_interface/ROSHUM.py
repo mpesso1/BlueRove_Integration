@@ -8,90 +8,7 @@ AUTHOR: MASON PESSON
 
 import rospy
 from std_msgs.msg import Byte
-import logging
-from blue_rov_custom_integration.srv import control_pid, control_pathplanner, cv_action, cv_actionResponse, pathplanner_update_waypoint, byte_update
-
-"""
-ROSHUM
-
-    Contains the logic necessary for the ROV to act correctly upon start up, in normal operation, and if an error is ocuring the correct prcedure will occure.
-    Also responsible for taking in the waypoints in waypoints.txt file to send to the path planner 
-
-    COMMUNICATION:
-        1.) ROSHUM (client) w/ pp_goPath (server) over pp_system_control Service
-            data:
-                bool ask_if_new_path_needed
-                bool cv_said_new_path
-                bool plot_traj              communicaiton necessary inorder to tell the pp that it needs to compute a new path and get feedback on why it is building a new path
-                ---                         also used to define if the pid should be on or off
-                bool need_new_path
-                bool pp_healthy
-                bool cv_enforced
-
-        2.) ROSHUM (client) w/ pp_pid (server) over pid_system_control
-            data:
-                bool PID_on
-                bool PID_off
-                bool New_Traj               communication needed in order to turn on or block the pid from operating.  NOTE also that the pid is what turns the path planner on in the first place
-                ---
-                bool action_taken
-                bool pid_healthy
-
-        3.) ROSHUM (client) x/ pp_goPath (server) over pp_waypoint
-            data: 
-                float64 x
-                float64 y
-                float64 z
-                float64 yaw
-                float64 Ox                  necessary info inorder to communicate to the path planner the new waypoint to go to or the new objet to move around
-                float64 Oy
-                float64 Oz
-                ---
-                bool traj_ready
-
-"""
-
-"""Global variables to store object or pose waypoints"""
-Ox = None  # x object cordinate UNITS: m
-Oy = None  # y object cordinate UNITS: m
-Oz = None  # z object cordinate UNITS: m
-
-X_WP = []  # x cordinate waypoints UNITS: m
-Y_WP = []  # y cordinate waypoints UNITS: m
-Z_WP = []  # z cordinate waypoints UNITS: m
-YAW_WP = []   # yaw cordinate waypoints UNTIS: deg
-
-TOTAL_WAYPOINTS = 0   # index on num of waypoints to determine when path is finished
-wpIDX = 0   # index to cycle through waypoints 
-
-MISSION_COMPLETE_FLAG = False # used to denote when all goal waypoints have been met i.e. wpIDX = TOTAL_WAYPOINTS
-
-NO_MORE_WAYPOINTS = False
-
-"""
-Upload waypoints from text file
-<x> <y> <z> <yaw>
-"""
-with open('/home/mason/catkin_ws/src/blue_rov_custom_integration/src/human_interface/readwaypoint.txt') as f:
-    num_waypoints = 0
-    for line in f:
-        s = line.split()
-        if len(s) == 4:
-            X_WP.append(float(s[0])) # UNIT: m
-            Y_WP.append(float(s[1])) # UNIT:m
-            Z_WP.append(float(s[2])) # UNIT: m
-            YAW_WP.append(float(s[3])) # UNIT: deg
-            num_waypoints += 1
-        else:
-            print("waypoint definition does not contain 4 inputs")
-    TOTAL_WAYPOINTS = num_waypoints
-
-print(YAW_WP)
-
-if TOTAL_WAYPOINTS == 0: 
-    logging.warning("[ROSHUM]:  NO MISSION SET --> waypoint text file was defined as empty.")
-    NO_MORE_WAYPOINTS = True
-    MISSION_COMPLETE_FLAG = True
+from blue_rov_custom_integration.srv import *
 
 
 # bitmap used to link each index of bitmap value to its meaning... use this to understand what each bit does
@@ -131,44 +48,161 @@ def int_to_binary(data):
     return '{0:07b}'.format(data)
 
 
+# Object Cordinates
+Ox = None  # UNITS: m
+Oy = None  # UNITS: m
+Oz = None  # UNITS: m
+
+# WPs
+X_WP = []  # UNITS: m
+Y_WP = []  # UNITS: m
+Z_WP = []  # UNITS: m
+YAW_WP = []   # UNTIS: rad
+
+wpIDX = 0   # WP index
+
+# system/wp logic
+TOTAL_WAYPOINTS = 0  
+MISSION_COMPLETE_FLAG = False 
+NO_MORE_WAYPOINTS = False
+
+reset_pathplanner_NEED_NEW_WP = False
+
+# WP text manipulation
+def WPfile_empty():
+    '''
+    empty wp text file
+    '''
+    with open('/home/mason/catkin_ws/src/blue_rov_custom_integration/src/human_interface/readwaypoint.txt', 'w') as f:
+        f.write('')
+def WPsys_reset():
+    '''
+    empty all wp data holders for incoming wp txt info
+    '''
+    global X_WP, Y_WP, Z_WP, YAW_WP
+    global TOTAL_WAYPOINTS, wpIDX, MISSION_COMPLETE_FLAG, NO_MORE_WAYPOINTS
+    global system_binary_input, system_binary_array_input, system_binary_current, system_binary_array_current, system_num_current, system_num_last
+
+
+    # WPs
+    X_WP = []  # UNITS: m
+    Y_WP = []  # UNITS: m
+    Z_WP = []  # UNITS: m
+    YAW_WP = []   # UNTIS: rad
+
+    wpIDX = 0   # WP index
+
+    # system/wp logic
+    TOTAL_WAYPOINTS = 0  
+    MISSION_COMPLETE_FLAG = False 
+    NO_MORE_WAYPOINTS = False
+
+    # INPUT FROM ROVMAV
+    system_binary_input = '0000000'       # Binary value defining the state of the system.  According to ROSHUM is initially set to 0.
+    system_binary_array_input = []        # Array storing each value from the bitmap
+
+    # CURRENT/LAST VALUES FROM LAST INPUT FROM ROVMAV
+    system_binary_current = '0000000'     # Binary value defining the state of the system.  According to ROSHUM is initially set to 0.
+    system_binary_array_current = []      # Array storing each value from the bitmap
+    system_num_current = 0                # int representing the binary value
+
+    system_num_last = 0                   # According to ROSHUM initially set to 0 to match what the initial ROSHUM binary value is
+def WPfile_read():
+    global X_WP, Y_WP, Z_WP, YAW_WP
+    global TOTAL_WAYPOINTS, MISSION_COMPLETE_FLAG, NO_MORE_WAYPOINTS
+
+    WPsys_reset() # reset wp configuration data
+
+    # Upload waypoints from text file:   <x> <y> <z> <yaw>
+    with open('/home/mason/catkin_ws/src/blue_rov_custom_integration/src/human_interface/readwaypoint.txt') as f:
+        num_waypoints = 0
+        for line in f:
+            s = line.split()
+            if len(s) == 4:
+                X_WP.append(float(s[0])) # UNIT: m
+                Y_WP.append(float(s[1])) # UNIT:m
+                Z_WP.append(float(s[2])) # UNIT: m
+                if abs(float(s[3])) != float(s[3]):
+                    YAW_WP.append(2*3.14 + float(s[3])) # UNIT: deg
+                else:
+                    YAW_WP.append(float(s[3])) # UNIT: deg
+                num_waypoints += 1
+            else:
+                print("\033[5;41m WAYPOINT text file must be formated as <x> <y> <z> <thz> or no input \033[m")
+        TOTAL_WAYPOINTS = num_waypoints
+
+    if TOTAL_WAYPOINTS == 0: 
+        print("\033[7;30m NO MISSION SET --> waypoint text file was defined as empty. \033[m")
+        NO_MORE_WAYPOINTS = True
+        MISSION_COMPLETE_FLAG = True
+    else:
+        NO_MORE_WAYPOINTS = False
+        MISSION_COMPLETE_FLAG = False
+
+    print(MISSION_COMPLETE_FLAG)
+
+    WPfile_empty()
+
+
+with open('/home/mason/catkin_ws/src/blue_rov_custom_integration/src/human_interface/readwaypoint.txt') as f:
+    num_waypoints = 0
+    for line in f:
+        s = line.split()
+        if len(s) == 4:
+            X_WP.append(float(s[0])) # UNIT: m
+            Y_WP.append(float(s[1])) # UNIT:m
+            Z_WP.append(float(s[2])) # UNIT: m
+            YAW_WP.append(float(s[3])) # UNIT: deg
+            num_waypoints += 1
+        else:
+            print("\033[5;41m WAYPOINT text file must be formated as <x> <y> <z> <thz> or no input \033[m")
+    TOTAL_WAYPOINTS = num_waypoints
+
+if TOTAL_WAYPOINTS == 0: 
+    print("\033[7;30m NO MISSION SET --> waypoint text file was defined as empty. \033[m")
+    NO_MORE_WAYPOINTS = True
+    MISSION_COMPLETE_FLAG = True
+
+
+
+
 # Global variable used to determine if the cv system has communicated that a new trajectory needs to be determined
 cv_said_new_path = False
 
 
+initial_message = """
+           \033[109;46m      JKS (Just Keep Swimming)      \033[m
+
+
+                \033[4;7m SYSTEM CONTROLS (Manual)\033[m
+\033[1;34m   [0] --> Arm       [o] --> Disarm        [9] --> Stabilize Mode \033[m
+\033[1;34m        [8] --> POsehold Mode \033[m
+
+
+                \033[4;7m SYSTEM CONTROLS (Autonomous)\033[m
+\033[1;34m   [h] --> Reset Linear Pose        [j] --> Set Rotational Offset \033[m
+\033[1;34m   n --> Define Dy        [v] --> Define Dx, Dz \033[m
+\033[1;34m   [b] --> Return to Origin        [r] --> Run System \033[m
+\033[1;34m           [y] --> Reset configuration data \033[m
+
+
+                \033[4;7m POSITION CONTROLS \033[m
+\033[1;34m   [w],[s] --> Forward, Backward      [a],[d] --> CW Rotate, CCW Rotate \033[m
+\033[1;34m   [l],[].] --> Up, Down               [,],[/] --> Left, Right \033[m
+
+
+
+\033[2;33m    
+    Mode: POSEHOLD
+    Keyboard: Disabled until mode set to Stabilize [9] and armed [0]
+    System: If waypoints defined then system will 
+            opperate autonomously \033[m
 """
-Callback concerning the SYSTEM_STATE topic used to communicate directly with ROSMAV node
 
-NOTE: The ROSMAV mode is important because it is the last stop to the system... think of this Node as the Gulf of Mexico is related to the Mississippi River... erveryhting funnels down to the gulf
-It contains all the feeback related to system performance.  Think of the ROSHUM node as being upstream and the ROSMAV node as being downstream... We use
-downstram information upstream to make dicisions for the system. These decisions then effect downstream and we get feedback.
+print(initial_message)
 
-NOTE: Action only takes place if the bitmap defining the system has changed from its previous state.  There are few situations when the bitmap should change.
-    1.) On startup of the system
-    2.) Whenever CV determines that the path needs to be reconstructed
-    3.) Any possible fault. --> faults get passed down through the system to ROVMAV
-    4.) Possibly on shutdown... may not be an issue
 
-NOTE: All communication that is taking place is through the use of ROS services and the SYSTEM_STATE topic that is streaming system information from ROSMAV.  
-That is, all services are being controlled though the following callback function.  
 
-List of Services: NOTE: All clients here
-
-    1.) Service: pp_system_control
-            - Client --> ROSHUM 
-            - Server --> pp_goPath
-            - srv: control_pathplanner
-
-    2.) Service: pid_system_control
-            - Client --> ROSHUM
-            - Server --> pp_pid
-            - srv: control_pid
-
-    3.) Service: pp_waypoint
-            - Client --> ROSHUM
-            - Server --> pp_goPath
-
-NOTE: All adjustments to the system byte are computed on the input variable and then transfered to current variable after completion of the callback
-"""
 def update_system_state(data):
 
     # Include global variables
@@ -182,7 +216,8 @@ def update_system_state(data):
     global MISSION_COMPLETE_FLAG
     global wpIDX
     global system_num_last
-    global NO_MORE_WAYPOINTS
+    global NO_MORE_WAYPOINTS, TOTAL_WAYPOINTS
+    global reset_pathplanner_NEED_NEW_WP
 
     # Convert system_num to binary string
     system_binary_input = int_to_binary(data.data)
@@ -204,21 +239,11 @@ def update_system_state(data):
 
             ask_if_new_path_needed = True # always ask for new path if system byte has changed
 
-            """
-            Reasons a new path may need to be genreated:
-                1.) There is currently no waypoint set e.g. the system is in startup
-                2.) The preexisting waypoint is exahsted meaning that the robot has reached it
-                3.) The CV system has determined an unexpected object in its view and would like pp to generate a new path around it
-
-            NOTE: possiblities 1 and 2 will need to be checked within the path planner and possibility 3 is a hard reset meaning that it will recompute the path no matter what
-            """
-            pp_response = pp_server(ask_if_new_path_needed,cv_said_new_path)  # cv_said_new_path coming from cv node and communicated through cv service
-
+            pp_response = pp_server(ask_if_new_path_needed,cv_said_new_path,reset_pathplanner_NEED_NEW_WP)  # cv_said_new_path coming from cv node and communicated through cv service
+            reset_pathplanner_NEED_NEW_WP = False
             # Set path planner healthy bit true if path planner says so
             if pp_response.pp_healthy: 
-
                 system_binary_array_input[bitmap_enum['PP_HEALTH']] = 1          # set to true if we can communicate
-
                 # Response from path planner defining that 1 of the 3 new path posibilities are true
                 if pp_response.need_new_path:
                     if not MISSION_COMPLETE_FLAG:
@@ -228,9 +253,6 @@ def update_system_state(data):
                         # Define object used to communicate over service
                         waypoint_server = rospy.ServiceProxy("pp_waypoint",pathplanner_update_waypoint) 
                         
-                        # Waypoints will be read from the file defining how the robot will travel area
-                        # Object will be directly read from CV input
-                        # Depending on whats values true the path planner will either use the xyzyaw values or the OxOyOz values
                         waypoint_response = waypoint_server(X_WP[wpIDX],Y_WP[wpIDX],Z_WP[wpIDX],YAW_WP[wpIDX],Ox,Oy,Oz) # see if possible.. includeother parameters in input of callback will possibly want to change these to arrays of values
 
                         if not pp_response.cv_enforced: # incrament the waypoint if the new traj is not because of new object defined by cv
@@ -238,11 +260,6 @@ def update_system_state(data):
                             if wpIDX >= TOTAL_WAYPOINTS:
                                 NO_MORE_WAYPOINTS = True
 
-                        """
-                        Now that the path planner has been envoked we will intiate the PID to turn on
-                        NOTE: The on and off of the PID is set as a push button meaning that if you turn it on you must then turn it off.
-                        It will not turn off after you stop telling it to turn on
-                        """
                         # Initiate communication with pid
                         rospy.wait_for_service('pid_system_control')
 
@@ -317,16 +334,17 @@ def update_system_state(data):
             ROVMAV_response = ROV_client(system_num_current)
 
             if ROVMAV_response.recieved:
-                print(system_num_current)
-                print(system_num_last)
-                print(system_binary_array_input)
+                pass
+                # print(system_num_current)
+                # print(system_num_last)
+                # print(system_binary_array_input)
                 
     else:
-        print("WARNING: Not recieving messages from ROVMAV... value is None") 
+        print("\033[1;33m WARNING: Not recieving messages from ROVMAV... value is None \033[m \n\n") 
 
 
 
-        
+
 def cv_action_callback(req):
     global cv_said_new_path
     global Ox
@@ -347,9 +365,21 @@ def cv_action_callback(req):
 
 rospy.init_node("ROSHUM")
 
+def wpTrigger_callback(req):
+    global reset_pathplanner_NEED_NEW_WP
+    if req.checkWPtext:
+        WPfile_read()
+
+    reset_pathplanner_NEED_NEW_WP = True
+
+    return wpTriggerResponse(True)
+
 # communicating directly with ROVMAV node on the complete cycled output of the system.  NEED TO MAKE SURE I AM APPROPRIATLY UPDATING THE BITMASK
 system_subscriber = rospy.Subscriber("SYSTEM_STATE",Byte,update_system_state) # need to test how these added parameters work
 
 cv_server = rospy.Service("cv_action_service",cv_action,cv_action_callback) # server to cv system for if it detects additional object in path all it will do is set fault in system byte for it to recalculate new path with updates object waypoint
+
+wpTriggerServer = rospy.Service("wpTrigger",wpTrigger,wpTrigger_callback)
+
 
 rospy.spin()

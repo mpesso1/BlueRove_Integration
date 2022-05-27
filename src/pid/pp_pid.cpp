@@ -14,57 +14,8 @@ AUTHOR: MASON PESSON
 #include "geometry_msgs/Pose.h"
 #include "nav_msgs/Odometry.h"
 #include "blue_rov_custom_integration/update_waypoint.h"
-
 #include "blue_rov_custom_integration/control_pid.h"
 
-/* 
-pp_node
-    Communication w/ ROSMAV 
-        input: ROV_ODOMETRY topic
-        output: ROV_RC_COMMANDS topic 
-            --> both defined in ROSMAV node
-
-    Communication w/ ROSHUM
-        in/out: pid_system_control
-            data:
-                - PID_ON
-                - PID_OFF
-                - NEWTRAJ
-
-            where data?: Data gets configured in the ROSHUM node and then sent here for controlling the pid
-
-        NOTE: pid becomes healthy as long as it can communicate with the ROSHUM node
-        NOTE: ROSMAV_HEALTHY determines 
-            - if the pid can accept odom data coming in
-            - if the pid can run
-        NOTE: PID_ON / PID_OFF determines if the pid can run and defined in ROSHUM
-        NOTE: NEW_TRAJ determines if path can be generated and initiates pid sequence
-
-    Communication w/ pp_goPath through service_line_waypoint Service
-        data: 
-                float64 x
-                float64 y
-                float64 z           Request defines the current pose coming from ROV_ODOMETRY
-                float64 thx
-                float64 thy
-                float64 thz
-                float64 x_vel
-                float64 y_vel
-                float64 z_vel
-                float64 thx_vel
-                float64 thy_vel
-                float64 thz_vel
-                ---
-                float64 x_way
-                float64 y_way
-                float64 z_way       Response defines the desired pose defined by pp
-                float64 thx_way
-                float64 thy_way
-                float64 thz_way
-
-        
-
-*/
 
 // COMMUNICATION VARIABLES / STATE VARIABLES ----------
 bool PID_ON = false;
@@ -77,20 +28,15 @@ bool NEW_TRAJ = false;
 enum Cordinates {X, Y, Z, THX, THY, THZ}; // Position
 enum Velocity {X_VEL, Y_VEL, Z_VEL, X_THVEL, Y_THVEL, Z_THVEL}; // Velocity
 
-
-
 // CONTROL VARIABLES ---------------
 const int DOF = 6; // Degrees of Freedom
 const float TOLERANCE = .1; // UNITS: m --> defines how close the desired_pose and current_pose states need to be to one another
 float dt; // UNITS: s --> time difference defined by chrono library
 
-
-
 // PID Gains Initialized ------------------------------
 Eigen::Matrix<float,1,6> pose_gain;
 Eigen::Matrix<float,1,6> inte_gain;
 Eigen::Matrix<float,1,6> deriv_gain;
-
 
 // ----- States Initialized ----------------------------
 Eigen::Matrix<float,6,1> desired_pose; // from path planner
@@ -100,18 +46,15 @@ Eigen::Matrix<float,6,1> current_velo; // from bluerov / mavlink interface
 
 float BtoLTHz = 0;
 
-
 // ROSHUM to PID --> System information
 // defined under main
 bool pid_control_action(blue_rov_custom_integration::control_pid::Request &req, blue_rov_custom_integration::control_pid::Response &res);
-
 
 // ROSMAV to PID  --> Odometry information
 // defined under main
 void odom_callback(const nav_msgs::Odometry& cs);
 
-
-// ** MAIN ** ------------------------------------------ *********
+// ** MAIN ** ------------------------------------------ *********                          <<
 int main(int argc, char** argv) {
 
     ros::init(argc,argv,"Controller");
@@ -123,7 +66,6 @@ int main(int argc, char** argv) {
 
     ros::Publisher desiredPlot = n.advertise<nav_msgs::Odometry>("PLOT_DESIRED",1000);
     ros::Publisher currentPlot = n.advertise<nav_msgs::Odometry>("PLOT_CURRENT",1000);
-
 
     // Subscribing TOPICS -----------------> From: ROSMAV <-----------------
     ros::Subscriber odom = n.subscribe("ROV_ODOMETRY",1000,odom_callback); // nav_msgs/Odometry  :  Defines current_* 
@@ -139,9 +81,9 @@ int main(int argc, char** argv) {
     // pose_gain << 160, 160, 60, .01, .01, 40;
     // inte_gain << 9000000, 9000000, 10000000, .0, .0, 9000000;
     // deriv_gain << .0, .0, .0, .0, .0, .0;
-    pose_gain << 350, 320, 60, .01, .01, 180;
-    inte_gain << 9000000, 9000000, 10000000, .0, .0, 9000000;
-    deriv_gain << .0, .0, .0, .0, .0, .0;
+    pose_gain << 170, 170, 135, .01, .01, 160; // z p --> 310
+    inte_gain << 900000, 900000, 900000, .0, .0, 900000;
+    deriv_gain << .0, .0, .0000, .0, .0, .0;
 
     // PID controller object ------------------------------------------------
     pid::rosPID controller(DOF, pose_gain, inte_gain, deriv_gain);
@@ -218,7 +160,7 @@ int main(int argc, char** argv) {
                 // std::cout << "Y Global: " << current_pose(Y) << std::endl;
 
                 if (state_reached) {
-                    controller.reset_pid(true);
+                    controller.reset_pid(true, true);
                     waypoint.request.NewTraj = false;
                     // Response from server ---------------------------------------------------------
                     if (client1.call(waypoint)) {
@@ -230,7 +172,7 @@ int main(int argc, char** argv) {
                         desired_pose(THZ) = waypoint.response.thz_way;
 
                         if (waypoint.response.pathcomplete) {
-                            controller.reset_pid(true);
+                            controller.reset_pid(true, true);
                             thrust.pose.pose.orientation.x = 1;
                             PID_ON = false;
                             PID_OFF = true;
@@ -310,7 +252,7 @@ void odom_callback(const nav_msgs::Odometry& cs) { // cs := current_pose state f
     // LINEAR odom data
     current_pose(X) = cs.pose.pose.position.x; // UNITS: m
     current_pose(Y) = cs.pose.pose.position.y; // UNITS: m
-    current_pose(Z) = 0;//cs.pose.pose.position.z; // UNITS: m ----------------------------________________KEKFFK#LE_#LD#)PKCEINVO#RJVojebnrgownj r2[ltbk ]   LOOK AT MEEEEEE <<<<<<<<<<<<<<<<<<<<<<<<<<<<_------------------
+    current_pose(Z) = cs.pose.pose.position.z; // UNITS: m ----------------------------________________KEKFFK#LE_#LD#)PKCEINVO#RJVojebnrgownj r2[ltbk ]   LOOK AT MEEEEEE <<<<<<<<<<<<<<<<<<<<<<<<<<<<_------------------
 
     current_velo(X_VEL) = cs.twist.twist.linear.x; // UNTIS: m/s
     current_velo(Y_VEL) = cs.twist.twist.linear.y; // UNTIS: m/s

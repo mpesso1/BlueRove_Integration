@@ -1,5 +1,6 @@
 bool ask_if_new_path_needed
 bool cv_said_new_path
+bool going_to_need_new_wp
 ---
 bool need_new_path
 bool pp_healthy

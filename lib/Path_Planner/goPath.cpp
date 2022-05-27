@@ -90,16 +90,23 @@ void root::MeanTraj::add_DOF(float a, float v0, float p0, float pf, int ForThisD
 
     // correction for radian circle loop
     if (ForThisDOF == 5) {
-        if (abs(p0) != p0) {
-            if (abs(pf - (6.28318530718+p0)) < abs(pf - p0)) {
-                p0 = 6.28318530718+p0;
+        if (p0 != abs(p0)) {
+            p0 = 2*3.14 + p0;
+        }
+
+        if (p0 > pf) {
+            if (abs(pf - p0) > abs(pf - (-2*3.14 + p0))) {
+                p0 = -2*3.14 + p0;
             }
-        } else {
-            if (abs(pf - (-6.28318530718+p0)) < abs(pf - p0)) {
-                p0 = -6.28318530718+p0;
+        }
+        if (pf > p0) {
+            if (abs(pf - p0) > abs(p0 - (-2*3.14 + pf))) {
+                pf = -2*3.14 + pf;
             }
         }
     }
+
+
 
     if (pf < p0) {
         a = a*-1;
