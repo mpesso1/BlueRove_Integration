@@ -632,6 +632,17 @@ class ROVMAV(object):
 
         if keyboard.is_pressed("space") or letsride:
 
+            # if keyboard.is_pressed("1"):
+            #     self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power)
+            # elif keyboard.is_pressed("s"):
+            #     self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power*-1)
+            # else:
+            #     if pid_thrust_x == abs(pid_thrust_x): # positive thrust, positive deadband
+            #         self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal + thruster_positive_deadband + pid_thrust_x)
+            #     else:
+            #         self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal + thruster_negative_deadband + pid_thrust_x)    
+
+
             if keyboard.is_pressed("w"):
                 self.set_rc_channel_pwm(self.rc_channel['vx'],thruster_nominal+thruster_power)
             elif keyboard.is_pressed("s"):
@@ -1077,14 +1088,15 @@ if __name__ == "__main__":
     rovmav = ROVMAV()
 
     rovmav.set_mode('MANUAL')
+    rovmav.arm_rov()
 
     # rovmav.arm_rov()
     # rovmav.disarm_rov()
     # rovmav.request_parameters_list()
 
-    rovmav.request_parameter_value('GND_EXT_BUS')
-    rovmav.set_parameter_value(1,'GND_EXT_BUS')
-    rovmav.request_parameter_value('GND_EXT_BUS')
+    # rovmav.request_parameter_value('GND_EXT_BUS')
+    # rovmav.set_parameter_value(1,'GND_EXT_BUS')
+    # rovmav.request_parameter_value('GND_EXT_BUS')
 
     # rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000)
     # rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000)

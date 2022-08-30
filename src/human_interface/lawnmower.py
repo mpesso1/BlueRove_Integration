@@ -97,6 +97,15 @@ def lawn_mower(_th_offset):
     '''
     global x, y, z, thz, Dx, Dz, dy
 
+    Dy = 5
+    dy = Dy/step
+
+    # Dx and Dz set together
+    Dx = 7
+
+
+
+
     # Logic used to create path. NOTE: the left and right values are flipped in relation to the trajectory due to the way the traj was originally coded
     Left = True
     Right = False
@@ -192,7 +201,7 @@ def lawn_mower(_th_offset):
     print('YAW: ', thz)
     
 
-    plot_waypoints(x,y,z)
+    # plot_waypoints(x,y,z)
 
     # Write path into text file to be used by system
     with open('/home/mason/catkin_ws/src/blue_rov_custom_integration/src/human_interface/readwaypoint.txt', 'w') as f:

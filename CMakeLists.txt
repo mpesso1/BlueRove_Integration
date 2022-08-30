@@ -45,7 +45,8 @@ add_library(pid_lib lib/pid/ros_pid.cpp lib/pid/ros_pid.h)
 target_include_directories(pid_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/pid")
 
 # pp_lib
-add_library(pp_lib lib/Path_Planner/goPath.cpp lib/Path_Planner/goPath.h)
+# read cmake book to understand how you can read from directory and add files with * symbol
+add_library(pp_lib lib/Path_Planner/goPath.cpp lib/Path_Planner/goPath.h lib/Path_Planner/A_star.cpp lib/Path_Planner/A_star.h)
 target_include_directories(pp_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/Path_Planner")
 
 # pp_node
@@ -58,9 +59,14 @@ add_executable(Controller_node src/pid/pp_pid.cpp)
 
 
 target_link_libraries(Controller_node PUBLIC ${catkin_LIBRARIES} pid_lib)
-target_link_libraries(pp_node PUBLIC ${catkin_LIBRARIES} pp_lib)
+
+target_link_libraries(pp_node PUBLIC ${catkin_LIBRARIES} 
+pp_lib ompl 
+${Boost_FILESYSTEM_LIBRARY}
+${Boost_SYSTEM_LIBRARY}
+${Boost_PROGRAM_OPTIONS_LIBRARY})
+
 target_link_libraries(pid_test PUBLIC ${catkin_LIBRARIES} pid_lib)
-#target_link_libraries(tester_node ${catkin_LIBRARIES})
 
 
 

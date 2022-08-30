@@ -92,6 +92,9 @@ void pid::rosPID::reset_pid(bool reset, bool keep_z) {
         area_error(2) = area_error_ph;
     }
 
+    // std::cout << "HEYYYYYYYYYYYYYYYYYYYYYYYYYYYYYY" << std::endl;
+    // std::cout << "integral error" << integral_error << std::endl;
+
     give_boost_ons = true;
 }
 
@@ -143,14 +146,13 @@ bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
     integral_error = integral_error + area_error;
 
     // PID id time domain
-    controller_output = dot(proportional_gain,(ds - cs)) + dot(integral_gain,integral_error) - dot(derivative_gain,(old_error-(ds - cs))/dt);
+    controller_output = dot(proportional_gain,(ds - cs)) + dot(integral_gain,integral_error) + dot(derivative_gain,(old_error-(ds - cs))/dt);
     //std::cout << "Integral Thrust: \n" << dot(integral_gain,integral_error) << std::endl;
 
-    std::cout << "z gain: " << proportional_gain(2) << std::endl;
 
 
     // std::cout << "intergral error: " << integral_error(2) << std::endl;
-    // std::cout << "area error: " << area_error(2) << std::endl;
+    std::cout << "diriv error: " << derivative_gain(5)*(old_error(5)-(ds(5) - cs(5)))/dt << std::endl;
 
     // derivative error computation
     old_error = ds - cs;

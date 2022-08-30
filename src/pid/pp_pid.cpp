@@ -81,9 +81,15 @@ int main(int argc, char** argv) {
     // pose_gain << 160, 160, 60, .01, .01, 40;
     // inte_gain << 9000000, 9000000, 10000000, .0, .0, 9000000;
     // deriv_gain << .0, .0, .0, .0, .0, .0;
-    pose_gain << 170, 170, 135, .01, .01, 160; // z p --> 310
-    inte_gain << 900000, 900000, 900000, .0, .0, 900000;
-    deriv_gain << .0, .0, .0000, .0, .0, .0;
+
+
+    // pose_gain << 170, 170, 135, .01, .01, 160; // z p --> 310
+    // inte_gain << 900000, 900000, 900000, .0, .0, 900000;
+    // deriv_gain << .0, .0, .0000, .0, .0, .0;
+
+    pose_gain << 170, 170, 135, .01, .01, 140; // z p --> 310
+    inte_gain << 900000, 900000, 900000, .0, .0, 70000;
+    deriv_gain << .0, .0, .0000, .0, .0, .000007;
 
     // PID controller object ------------------------------------------------
     pid::rosPID controller(DOF, pose_gain, inte_gain, deriv_gain);
@@ -106,7 +112,7 @@ int main(int argc, char** argv) {
         // Begin timmer -----------------------------------------------------------------
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         // ------------------------------------------------------------------------------
-
+        // std::cout << dt << std::endl;
         
         // ROVMAV_HEALTH gets communicated over ROV_ODOMETRY and PID_ON / NEW_TRAJ gets communicated through ROVHUM... communication with the path planner leads up to this
         if (ROVMAV_HEALTH=="HEALTHY" && PID_ON==true) { // ROVMAV_HEALTH does not become healthy until pid pp and ROVMAV health in system byte all get set set high... Need system byte to be set to 15 or greater
