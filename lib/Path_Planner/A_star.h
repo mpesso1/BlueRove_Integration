@@ -88,6 +88,8 @@ namespace star {
 
             bool is_already_in_bufferNodes(Node* const&,Node* const&);
 
+            std::vector<Eigen::Matrix<float,1,3>> return_path();
+
             std::vector<Eigen::Matrix<float,3,1>> obs;
 
     };

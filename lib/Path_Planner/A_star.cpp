@@ -202,6 +202,10 @@ float star::A_star::distance_between(Eigen::Matrix<float,3,1> start, Eigen::Matr
     return sqrt(pow(end(0)-start(0),2) + pow(end(1)-start(1),2) + pow(end(2)-start(2),2)); // absolute is implicit
 }
 
+std::vector<Eigen::Matrix<float,1,3>> star::A_star::return_path() {
+    return final_path;
+}
+
 
 int star::A_star::shift_point(int cordinate) {
     int remainder = cordinate % step;

@@ -5,6 +5,7 @@ AUTHOR: MASON PESSON
 */
 
 #include "goPath.h"
+#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/Path_Planner/A_star.h"
 #include <Eigen/Dense>
 #include <iostream>
 #include <chrono>
@@ -13,7 +14,7 @@ AUTHOR: MASON PESSON
 #include "blue_rov_custom_integration/update_waypoint.h"
 #include "blue_rov_custom_integration/control_pathplanner.h"
 #include "blue_rov_custom_integration/pathplanner_update_waypoint.h"
-
+#include <vector>
 #include <fstream>
 
 
@@ -33,6 +34,164 @@ pp_goPath
 
 using namespace std;
 using namespace root;
+
+// Base Class Path Planner
+
+template <const int DOF, const int STEPS> /*NOTE: any time a class is template defined, then when a subclass trys to call one of its members it will need to explicitly call the 'this' keyword... reasoning is related to template classes not being compiled until the class is instantiated with real template parameters. */
+class PathPlanner {
+    private:
+
+    std::vector<float> objx; // should change this to a vector with d type as Eigen matrix of size DOF 
+    std::vector<float> objy;
+    std::vector<float> objz;
+
+    protected:
+
+    Eigen::Matrix<float,STEPS+1, DOF> path_trans;
+    Eigen::Matrix<float,STEPS+1, DOF> path_angular;
+
+    vector<Eigen::Matrix<float,1,DOF>> objects;
+
+    Eigen::Matrix<float,1,DOF> init_pose;
+    Eigen::Matrix<float,1,DOF> init_vel;
+    Eigen::Matrix<float,1,DOF> init_acel;
+
+    Eigen::Matrix<float,1,DOF> goal_pose;
+    Eigen::Matrix<float,1,DOF> goal_vel;
+    Eigen::Matrix<float,1,DOF> goal_acel;
+
+    enum Cordinates {X, Y, Z, THX, THY, THZ}; // Position
+    enum Velocity {X_VEL, Y_VEL, Z_VEL, X_THVEL, Y_THVEL, Z_THVEL}; // Velocity
+
+    public:
+    PathPlanner(){};
+    ~PathPlanner(){};
+
+    virtual void add_object(float x, float y, float z);
+    virtual void add_pose(std::vector<Eigen::Matrix<float,1,DOF>> &pose);
+    virtual void add_vel(std::vector<Eigen::Matrix<float,1,DOF>> &vel);
+    virtual void add_acel(std::vector<Eigen::Matrix<float,1,DOF>> &acel);
+
+    //  What do I need??
+    virtual void setup(){};
+
+    virtual void compute(){};
+
+    virtual void store_results(){};
+};
+
+template <const int DOF, const int STEPS>
+void PathPlanner<DOF, STEPS>::add_object(float x, float y, float z) {
+    objects.push_back(Eigen::Matrix<float,1,DOF>{x,y,z});
+};
+
+template <const int DOF, const int STEPS>
+void PathPlanner<DOF,STEPS>::add_pose(std::vector<Eigen::Matrix<float,1,DOF>> &pose) {
+    init_pose = pose[0];
+};
+
+template <const int DOF, const int STEPS>
+void PathPlanner<DOF,STEPS>::add_vel(std::vector<Eigen::Matrix<float,1,DOF>> &vel) {
+    init_vel = vel[0];
+};
+
+template <const int DOF, const int STEPS>
+void PathPlanner<DOF,STEPS>::add_acel(std::vector<Eigen::Matrix<float,1,DOF>> &acel) {
+    init_acel = acel[0];
+};
+
+
+// goPath planner
+template <const int DOF, const int STEPS>
+class goPath : public PathPlanner<DOF, STEPS> {
+private:
+
+    // CONTROL VARIABLES ---------------
+    const float MAX_ACCEL = .1; // maximum acceleration of robot defined
+    int STEP = 0; // Index of what step the pid is on. Used to index trajectory. 
+
+    // const int DOF = 6; // Degrees of freedom
+    // const int STEPS = 60; // steps within trajectory
+    const int OCV = 3; // object concering DOF
+
+    const float WHOLE_SENSITIVITY = 5.0;
+    const float ABILITY_SENSITIVITY = 2.0;
+    const float POWER_SENSITIVITY = 2.0;
+
+
+public:
+
+    MeanTraj BlueRov;
+    
+    goPath();
+
+    void setup() override;
+    void compute() override;
+
+    void store_results() override;
+};
+
+template <const int DOF, const int STEPS>
+void goPath<DOF,STEPS>::store_results() { 
+    this->path_trans = BlueRov.trajectory_translational();
+    this->path_angular = BlueRov.trajectory_orientation();
+}
+
+template<const int DOF,const int STEPS>
+goPath<DOF,STEPS>::goPath() {BlueRov = MeanTraj(DOF,STEPS,OCV);};
+
+template <const int DOF,const int STEPS>
+void goPath<DOF,STEPS>::setup() {
+    BlueRov.set_sensitivity(WHOLE_SENSITIVITY,ABILITY_SENSITIVITY,POWER_SENSITIVITY);
+};
+
+template<const int DOF, const int STEPS>
+void goPath<DOF,STEPS>::compute() {
+    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->X], this->init_pose[this->X], this->goal_pose[this->X], 0, true); 
+    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->Y], this->init_pose[this->Y], this->goal_pose[this->Y], 1, true); 
+    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->Z], this->init_pose[this->Z], this->goal_pose[this->Z], 2, true);
+    BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 3, false);
+    BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 4, false);
+    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->Z_THVEL], this->init_pose[this->THZ], this->goal_pose[this->THZ], 5, false);
+
+    BlueRov.optimize(this->objects.col(0),this->objects.col(1),this->objects.col(2));
+};
+
+
+template <const int DOF, const int STEPS>
+class Astar : public PathPlanner<DOF,STEPS> {
+private:
+    const int step;
+protected:
+public:
+
+    star::A_star BlueRov;
+
+    Astar(int step);
+    void setup() override {};
+    void compute() override;
+    void store_results() override;
+};
+
+template<const int DOF, const int STEPS>
+Astar<DOF,STEPS>::Astar(int step) : step (step) {};
+
+template <const int DOF, const int STEPS>
+void Astar<DOF,STEPS>::compute() {
+    star::A_star BlueRov(Eigen::Matrix<float,1,3>{this->init_pose(this->X), this->init_pose(this->Y), this->init_pose(this->Z)}, 
+                   Eigen::Matrix<float,1,3>{this->goal_pose(this->X), this->goal_pose(this->Y), this->goal_pose(this->Z)}, 
+                   this->objects[0], step);
+}
+
+template <const int DOF, const int STEPS>
+void Astar<DOF,STEPS>::store_results() {
+    std::vector<Eigen::Matrix<float,1,3>> path_buffer = BlueRov.return_path();
+    this->path_trans.resize(path_buffer.size(),3);
+    
+    this->path_trans = path_buffer;
+}
+
+
 
 #define PI 3.14159265
 
@@ -73,7 +232,7 @@ std::vector<float> objz;
 
 
 // Trajectory -----------------------------------------
-/* Will store the entire trajectories for both translational and rotational movement */;
+/* Will store the entire trajectories for both translational and rotational movement */
 Eigen::Matrix<float,60+1, 3> path_trans;
 Eigen::Matrix<float,60+1, 1> path_angular; // currently need the amount of steps to be set to 60
 
