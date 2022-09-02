@@ -335,12 +335,12 @@ void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,
             final_vel = final_vel - (sensitivity[0])*Kv*(sensitivity[1]*Kv_inv*(final_vel-mean_vel) + g_vel.transpose());
             
 
-            if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
-                std::cout << final_pos.transpose() << std::endl;
-            }
-            if (i == 1 || i == 3 || i == 5 || i == 7 || i == 9 || i == 11 || i == 13) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
-                std::cout << final_pos.transpose() << std::endl;
-            }
+            // if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
+            //     std::cout << final_pos.transpose() << std::endl;
+            // }
+            // if (i == 1 || i == 3 || i == 5 || i == 7 || i == 9 || i == 11 || i == 13) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
+            //     std::cout << final_pos.transpose() << std::endl;
+            // }
             
             if (final_pos.isApprox(check_pos,.00001)) {
                 // std::cout << "mason" << std::endl;

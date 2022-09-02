@@ -3,9 +3,10 @@ ICORE LSU MECS
 DATE:  APRIL 6th, 2022
 AUTHOR: MASON PESSON
 */
+#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_goPath.h"
+#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_Astar.h"
+#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_omplRRTConnect.h"
 
-#include "goPath.h"
-#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/Path_Planner/A_star.h"
 #include <Eigen/Dense>
 #include <iostream>
 #include <chrono>
@@ -35,215 +36,25 @@ pp_goPath
 using namespace std;
 using namespace root;
 
-// Base Class Path Planner
-
-template <const int DOF, const int STEPS> /*NOTE: any time a class is template defined, then when a subclass trys to call one of its members it will need to explicitly call the 'this' keyword... reasoning is related to template classes not being compiled until the class is instantiated with real template parameters. */
-class PathPlanner {
-    private:
-
-    std::vector<float> objx; // should change this to a vector with d type as Eigen matrix of size DOF 
-    std::vector<float> objy;
-    std::vector<float> objz;
-
-    protected:
-
-    Eigen::Matrix<float,STEPS+1, DOF> path_trans;
-    Eigen::Matrix<float,STEPS+1, DOF> path_angular;
-
-    vector<Eigen::Matrix<float,1,DOF>> objects;
-
-    Eigen::Matrix<float,1,DOF> init_pose;
-    Eigen::Matrix<float,1,DOF> init_vel;
-    Eigen::Matrix<float,1,DOF> init_acel;
-
-    Eigen::Matrix<float,1,DOF> goal_pose;
-    Eigen::Matrix<float,1,DOF> goal_vel;
-    Eigen::Matrix<float,1,DOF> goal_acel;
-
-    enum Cordinates {X, Y, Z, THX, THY, THZ}; // Position
-    enum Velocity {X_VEL, Y_VEL, Z_VEL, X_THVEL, Y_THVEL, Z_THVEL}; // Velocity
-
-    public:
-    PathPlanner(){};
-    ~PathPlanner(){};
-
-    virtual void add_object(float x, float y, float z);
-    virtual void add_pose(std::vector<Eigen::Matrix<float,1,DOF>> &pose);
-    virtual void add_vel(std::vector<Eigen::Matrix<float,1,DOF>> &vel);
-    virtual void add_acel(std::vector<Eigen::Matrix<float,1,DOF>> &acel);
-
-    //  What do I need??
-    virtual void setup(){};
-
-    virtual void compute(){};
-
-    virtual void store_results(){};
-};
-
-template <const int DOF, const int STEPS>
-void PathPlanner<DOF, STEPS>::add_object(float x, float y, float z) {
-    objects.push_back(Eigen::Matrix<float,1,DOF>{x,y,z});
-};
-
-template <const int DOF, const int STEPS>
-void PathPlanner<DOF,STEPS>::add_pose(std::vector<Eigen::Matrix<float,1,DOF>> &pose) {
-    init_pose = pose[0];
-};
-
-template <const int DOF, const int STEPS>
-void PathPlanner<DOF,STEPS>::add_vel(std::vector<Eigen::Matrix<float,1,DOF>> &vel) {
-    init_vel = vel[0];
-};
-
-template <const int DOF, const int STEPS>
-void PathPlanner<DOF,STEPS>::add_acel(std::vector<Eigen::Matrix<float,1,DOF>> &acel) {
-    init_acel = acel[0];
-};
-
-
-// goPath planner
-template <const int DOF, const int STEPS>
-class goPath : public PathPlanner<DOF, STEPS> {
-private:
-
-    // CONTROL VARIABLES ---------------
-    const float MAX_ACCEL = .1; // maximum acceleration of robot defined
-    int STEP = 0; // Index of what step the pid is on. Used to index trajectory. 
-
-    // const int DOF = 6; // Degrees of freedom
-    // const int STEPS = 60; // steps within trajectory
-    const int OCV = 3; // object concering DOF
-
-    const float WHOLE_SENSITIVITY = 5.0;
-    const float ABILITY_SENSITIVITY = 2.0;
-    const float POWER_SENSITIVITY = 2.0;
-
-
-public:
-
-    MeanTraj BlueRov;
-    
-    goPath();
-
-    void setup() override;
-    void compute() override;
-
-    void store_results() override;
-};
-
-template <const int DOF, const int STEPS>
-void goPath<DOF,STEPS>::store_results() { 
-    this->path_trans = BlueRov.trajectory_translational();
-    this->path_angular = BlueRov.trajectory_orientation();
-}
-
-template<const int DOF,const int STEPS>
-goPath<DOF,STEPS>::goPath() {BlueRov = MeanTraj(DOF,STEPS,OCV);};
-
-template <const int DOF,const int STEPS>
-void goPath<DOF,STEPS>::setup() {
-    BlueRov.set_sensitivity(WHOLE_SENSITIVITY,ABILITY_SENSITIVITY,POWER_SENSITIVITY);
-};
-
-template<const int DOF, const int STEPS>
-void goPath<DOF,STEPS>::compute() {
-    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->X], this->init_pose[this->X], this->goal_pose[this->X], 0, true); 
-    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->Y], this->init_pose[this->Y], this->goal_pose[this->Y], 1, true); 
-    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->Z], this->init_pose[this->Z], this->goal_pose[this->Z], 2, true);
-    BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 3, false);
-    BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 4, false);
-    BlueRov.add_DOF(MAX_ACCEL, this->init_vel[this->Z_THVEL], this->init_pose[this->THZ], this->goal_pose[this->THZ], 5, false);
-
-    BlueRov.optimize(this->objects.col(0),this->objects.col(1),this->objects.col(2));
-};
-
-
-template <const int DOF, const int STEPS>
-class Astar : public PathPlanner<DOF,STEPS> {
-private:
-    const int step;
-protected:
-public:
-
-    star::A_star BlueRov;
-
-    Astar(int step);
-    void setup() override {};
-    void compute() override;
-    void store_results() override;
-};
-
-template<const int DOF, const int STEPS>
-Astar<DOF,STEPS>::Astar(int step) : step (step) {};
-
-template <const int DOF, const int STEPS>
-void Astar<DOF,STEPS>::compute() {
-    star::A_star BlueRov(Eigen::Matrix<float,1,3>{this->init_pose(this->X), this->init_pose(this->Y), this->init_pose(this->Z)}, 
-                   Eigen::Matrix<float,1,3>{this->goal_pose(this->X), this->goal_pose(this->Y), this->goal_pose(this->Z)}, 
-                   this->objects[0], step);
-}
-
-template <const int DOF, const int STEPS>
-void Astar<DOF,STEPS>::store_results() {
-    std::vector<Eigen::Matrix<float,1,3>> path_buffer = BlueRov.return_path();
-    this->path_trans.resize(path_buffer.size(),3);
-    
-    this->path_trans = path_buffer;
-}
-
-
 
 #define PI 3.14159265
 
 // Waypoint / Final Goal Data
 bool NEED_NEW_WAYPOINT = true;// indication if we need new trajectory
 bool NEW_TRAJ = false; // boolian defining if new path is going to be generated
-float x_goal_wp;
-float y_goal_wp;
-float z_goal_wp;
-float yaw_goal_wp;
 
 // ENUM DEFINING DEGREES OF FREEDOM -------------------
 enum Cordinates {X, Y, Z, THX, THY, THZ}; // Position
 enum Velocity {X_VEL, Y_VEL, Z_VEL, X_THVEL, Y_THVEL, Z_THVEL}; // Velocity
 
-
-// CONTROL VARIABLES ---------------
-const float MAX_ACCEL = .1; // maximum acceleration of robot defined
 int STEP = 0; // Index of what step the pid is on. Used to index trajectory. 
+int STEPS = 60;
+const int DOF = 6;
 
-const int DOF = 6; // Degrees of freedom
-const int STEPS = 60; // steps within trajectory
-const int OCV = 3; // object concering DOF
-
-const float WHOLE_SENSITIVITY = 5.0;
-const float ABILITY_SENSITIVITY = 2.0;
-const float POWER_SENSITIVITY = 2.0;
-
-
-// Path Planning Object -------------------------------
-MeanTraj BlueRov(DOF, STEPS, OCV);
-
-
-// Object Cordinates ----------------------------------
-std::vector<float> objx;
-std::vector<float> objy;
-std::vector<float> objz;
-
-
-// Trajectory -----------------------------------------
-/* Will store the entire trajectories for both translational and rotational movement */
-Eigen::Matrix<float,60+1, 3> path_trans;
-Eigen::Matrix<float,60+1, 1> path_angular; // currently need the amount of steps to be set to 60
-
-
-// Adds an object into the object array that gets iterated over while defining the trajectory
-void add_object_xyz(float x, float y, float z); // Defined under main
-
+pp::PathPlanner<DOF>* planner = new _goPath<DOF>();
 
 // Server response decloration -------------------------
 bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, blue_rov_custom_integration::update_waypoint::Response &res);
-
 
 // only gets called whenever the system byte has changed and communicated through the ROSHUM node
 bool pp_control_action(blue_rov_custom_integration::control_pathplanner::Request &req, blue_rov_custom_integration::control_pathplanner::Response &res);
@@ -255,8 +66,7 @@ bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoi
 // ** MAIN ** ------------------------------------------ *********
 int main(int argc,char** argv) {
 
-    // Control path planner sensitivity parameters -------------------------
-    BlueRov.set_sensitivity(WHOLE_SENSITIVITY,ABILITY_SENSITIVITY,POWER_SENSITIVITY);
+    planner->setup();
 
     ros::init(argc,argv,"Path_Planner");
     ros::NodeHandle n;
@@ -273,14 +83,6 @@ int main(int argc,char** argv) {
 }
 
 
-// Create pseudo objects function
-void add_object_xyz(float x, float y, float z) {
-    objx.push_back(x);
-    objy.push_back(y);
-    objz.push_back(z);
-}
-
-
 // WILL NOT GET CALLED UNTIL PID GET CALLED FROM ROSHUM
 bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, blue_rov_custom_integration::update_waypoint::Response &res) {
     
@@ -293,49 +95,26 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
 
         //""" Do not generate new trajectory until needed again. Just feed waypoints """;
         NEW_TRAJ = false;
-        // Initialize prior trajectories ----------------------
-        /* acceleration, init velocity, init poition, final position, indx of DOF (used for algorithm), boolian defining ocv */
-        BlueRov.add_DOF(MAX_ACCEL, req.x_vel, req.x, x_goal_wp, 0, true); 
-        BlueRov.add_DOF(MAX_ACCEL, req.y_vel, req.y, y_goal_wp, 1, true); 
-        BlueRov.add_DOF(MAX_ACCEL, req.z_vel, req.z, z_goal_wp, 2, true);
-        BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 3, false);
-        BlueRov.add_DOF(MAX_ACCEL, 0, 0, 0, 4, false);
-        BlueRov.add_DOF(MAX_ACCEL, req.thz_vel, req.thz, yaw_goal_wp, 5, false);
 
-        // Optimize trajectory based on object cordinates -----
-        BlueRov.optimize(objx,objy,objz);
+        planner->compute();
+
         cout << "PATH CREATED";
 
-        // Store trajectory -----------------------------------
-        path_trans = BlueRov.trajectory_translational();
-        path_angular = BlueRov.trajectory_orientation();
-
-
-        std::cout << path_trans << " ";
-        std::cout << path_angular << std::endl;
-
-        // ofstream myfile;
-        // myfile.open ("/home/mason/catkin_ws/src/blue_rov_custom_integration/src/Path_Planner/store.txt");
-        // myfile << "";
-        // myfile << path_trans.transpose();
-        // myfile << "MAOSN";
-        // myfile << path_angular.transpose();
-        // myfile.close();
+        // std::cout << planner->path_trans << " ";
+        // std::cout << planner->path_angular << std::endl;
     }
-
 
     // Increment trajectory index -------------------------
     STEP = STEP + 1;
 
     // std::cout << "Sending desired pose from pp\n";
 
-    // Send trajectory waypoint ---------------------------
-    res.x_way = path_trans(STEP,0); //sqrt(pow(path_trans(STEP,0),2) + pow(path_trans(STEP,1),2));
-    res.y_way = path_trans(STEP,1);
-    res.z_way = path_trans(STEP,2);
+    res.x_way = planner->get_pose_linear(STEP,0); 
+    res.y_way = planner->get_pose_linear(STEP,1);
+    res.z_way = planner->get_pose_linear(STEP,2);
     res.thx_way = 0;
     res.thy_way = 0;
-    res.thz_way = path_angular(STEP,0);
+    res.thz_way = planner->get_pose_angular(STEP,0);
     
     // std::cout << "Desired Angle: " << res.thz_way << std::endl;
     // std::cout << "Desired X: " << res.x_way << std::endl;
@@ -378,16 +157,24 @@ bool pp_control_action(blue_rov_custom_integration::control_pathplanner::Request
 
 
 bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoint::Request &req, blue_rov_custom_integration::pathplanner_update_waypoint::Response &res) {
-    x_goal_wp = req.x;
-    y_goal_wp = req.y;
-    z_goal_wp = req.z;
-    yaw_goal_wp = req.yaw;
+
+    Eigen::Matrix<float,1,DOF> m;
+
+    if (DOF == 6) {
+        m << req.x,req.y,req.z,0,0,req.yaw;
+    }
+    else if (DOF == 3)
+    {
+        m << req.x,req.y,req.z;
+    }
+    
+    planner->goal_pose = m;
 
 
-    // cout << "x_goal_wp:  " << x_goal_wp << endl;
-    // std::cout >> "y_goal_wp:  " >> y_goal_wp >> std::endl;
-    std::cout << "z_goal_wp:  " << z_goal_wp << std::endl;
-    // std::cout >> "yaw_goal_wp:  " >> yaw_goal_wp >> std::endl;
+    cout << "x_goal_wp:  " << planner->goal_pose(X) << endl;
+    std::cout << "y_goal_wp:  " << planner->goal_pose(Y) << std::endl;
+    std::cout << "z_goal_wp:  " << planner->goal_pose(Z) << std::endl;
+    std::cout << "yaw_goal_wp:  " << planner->goal_pose(THZ) << std::endl;
 
 
 
@@ -396,7 +183,7 @@ bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoi
         // need a way of not adding objects whenever cv does not add new object otherwise this will add an object to location 0
     }
     else {
-        add_object_xyz(req.ox,req.oy,req.oz);    
+        planner->add_object(req.ox,req.oy,req.oz);
     }
 
     return true;

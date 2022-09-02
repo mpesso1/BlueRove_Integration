@@ -46,8 +46,16 @@ target_include_directories(pid_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/pid")
 
 # pp_lib
 # read cmake book to understand how you can read from directory and add files with * symbol
-add_library(pp_lib lib/Path_Planner/goPath.cpp lib/Path_Planner/goPath.h lib/Path_Planner/A_star.cpp lib/Path_Planner/A_star.h)
-target_include_directories(pp_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/Path_Planner")
+add_library(pp_lib 
+lib/PathPlanner/PathPlanners/goPath.cpp lib/PathPlanner/PathPlanners/goPath.h 
+lib/PathPlanner/PathPlanners/A_star.cpp lib/PathPlanner/PathPlanners/A_star.h 
+lib/PathPlanner/PathPlanners/ompl_RRTConnect.cpp lib/PathPlanner/PathPlanners/ompl_RRTConnect.h
+lib/PathPlanner/PlannerTemplates/_Astar.h
+lib/PathPlanner/PlannerTemplates/_goPath.h
+lib/PathPlanner/PlannerTemplates/PathPlanner.h
+lib/PathPlanner/PlannerTemplates/_omplRRTConnect.h)
+
+target_include_directories(pp_lib PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/lib/PathPlanner")
 
 # pp_node
 add_executable(pp_node src/Path_Planner/pp_goPath.cpp)

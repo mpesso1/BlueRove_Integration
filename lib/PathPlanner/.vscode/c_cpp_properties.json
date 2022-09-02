@@ -1,0 +1,31 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "${default}",
+        "limitSymbolsToIncludedHeaders": false
+      },
+      "includePath": [
+        "/home/mason/catkin_ws/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/mason/catkin_ws/src/blue_rov_custom_integration/include/**",
+        "/home/mason/catkin_ws/src/kalman_filters_files/ekf_ukf/include/**",
+        "/home/mason/catkin_ws/src/freefloating_gazebo/include/**",
+        "/home/mason/catkin_ws/src/jks/include/**",
+        "/home/mason/catkin_ws/src/key_testing/include/**",
+        "/home/mason/catkin_ws/src/lab0_ros/include/**",
+        "/home/mason/catkin_ws/src/ompl_testing/include/**",
+        "/home/mason/catkin_ws/src/planning/include/**",
+        "/home/mason/catkin_ws/src/robot_localization/include/**",
+        "/home/mason/catkin_ws/src/service_tester/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS",
+      "intelliSenseMode": "gcc-x64",
+      "compilerPath": "/usr/bin/gcc",
+      "cStandard": "gnu11",
+      "cppStandard": "c++14"
+    }
+  ],
+  "version": 4
+}

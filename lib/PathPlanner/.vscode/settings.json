@@ -3,11 +3,8 @@
         "/home/mason/catkin_ws/devel/lib/python2.7/dist-packages",
         "/opt/ros/melodic/lib/python2.7/dist-packages"
     ],
-    "python.analysis.extraPaths": [
-        "/home/mason/catkin_ws/devel/lib/python2.7/dist-packages",
-        "/opt/ros/melodic/lib/python2.7/dist-packages"
-    ],
     "files.associations": {
+        "ostream": "cpp",
         "cctype": "cpp",
         "clocale": "cpp",
         "cmath": "cpp",
@@ -55,6 +52,7 @@
         "hash_map": "cpp",
         "hash_set": "cpp",
         "fstream": "cpp",
+        "future": "cpp",
         "initializer_list": "cpp",
         "iomanip": "cpp",
         "iosfwd": "cpp",
@@ -63,7 +61,6 @@
         "limits": "cpp",
         "mutex": "cpp",
         "new": "cpp",
-        "ostream": "cpp",
         "sstream": "cpp",
         "stdexcept": "cpp",
         "streambuf": "cpp",
@@ -73,9 +70,6 @@
         "typeindex": "cpp",
         "typeinfo": "cpp",
         "valarray": "cpp",
-        "future": "cpp",
-        "variant": "cpp",
-        "core": "cpp",
-        "dense": "cpp"
+        "variant": "cpp"
     }
 }

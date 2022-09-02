@@ -149,9 +149,9 @@ void star::A_star::run() {
         openNodes.erase(current_node);
     }
 
-    for (auto i = final_path.begin(); i != final_path.end(); i++) {
-        cout << (*i) << endl;
-    }
+    // for (auto i = final_path.begin(); i != final_path.end(); i++) {
+    //     cout << (*i) << endl;
+    // }
 
 }
 
