@@ -152,7 +152,7 @@ bool pid::rosPID::run_pid(float dt, Eigen::Matrix<float,Eigen::Dynamic,Eigen::Dy
 
 
     // std::cout << "intergral error: " << integral_error(2) << std::endl;
-    std::cout << "diriv error: " << derivative_gain(5)*(old_error(5)-(ds(5) - cs(5)))/dt << std::endl;
+    //std::cout << "diriv error: " << derivative_gain(5)*(old_error(5)-(ds(5) - cs(5)))/dt << std::endl;
 
     // derivative error computation
     old_error = ds - cs;

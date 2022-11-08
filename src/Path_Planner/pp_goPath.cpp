@@ -3,9 +3,11 @@ ICORE LSU MECS
 DATE:  APRIL 6th, 2022
 AUTHOR: MASON PESSON
 */
-#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_goPath.h"
-#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_Astar.h"
-#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_omplRRTConnect.h"
+// #include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_goPath.h"
+// #include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_Astar.h"
+// #include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_omplRRTConnect.h"
+
+#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PathPlanners/goPath.h"
 
 #include <Eigen/Dense>
 #include <iostream>
@@ -51,7 +53,16 @@ int STEP = 0; // Index of what step the pid is on. Used to index trajectory.
 int STEPS = 60;
 const int DOF = 6;
 
-pp::PathPlanner<DOF>* planner = new _goPath<DOF>();
+Eigen::Matrix<float,61, 3> path_trans;
+Eigen::Matrix<float,61, 1> path_anglu;
+
+Eigen::Matrix<float,1,DOF> goal_pose;
+
+float ojx {};
+float ojy {};
+float ojz {};
+
+
 
 // Server response decloration -------------------------
 bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, blue_rov_custom_integration::update_waypoint::Response &res);
@@ -65,8 +76,6 @@ bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoi
 
 // ** MAIN ** ------------------------------------------ *********
 int main(int argc,char** argv) {
-
-    planner->setup();
 
     ros::init(argc,argv,"Path_Planner");
     ros::NodeHandle n;
@@ -96,25 +105,118 @@ bool send_waypoint(blue_rov_custom_integration::update_waypoint::Request &req, b
         //""" Do not generate new trajectory until needed again. Just feed waypoints """;
         NEW_TRAJ = false;
 
-        planner->compute();
+        float start_x = req.x;
+        float start_y = req.y;
+        float start_z = req.z;
+        float start_thz = req.thz;
 
-        cout << "PATH CREATED";
+        cout << "INIT POSE: " << start_x << endl;
+        cout << "INIT POSE: " << start_y << endl;
+        cout << "INIT POSE: " << start_z << endl;
+        cout << "INIT POSE: " << start_thz << endl;
 
-        // std::cout << planner->path_trans << " ";
-        // std::cout << planner->path_angular << std::endl;
+        float final_x = goal_pose(X);
+        float final_y = goal_pose(Y);
+        float final_z = goal_pose(Z);
+        float final_thz = goal_pose(THZ);
+
+        cout << "GOAL POSE: " << final_x << endl;
+        cout << "GOAL POSE: " << final_y << endl;
+        cout << "GOAL POSE: " << final_z << endl;
+        cout << "GOAL POSE: " << final_thz << endl;
+
+        //Timer time;
+        MeanTraj BlueRov(6,60,3); // # of DOF , steps, # of ocv
+        // .2, -.7 init velos
+        BlueRov.set_sensitivity(50,25,1); // whole, ability, power
+        BlueRov.add_DOF(.1, 0 ,start_x,final_x,0,true); // acceleration, init velocity, init poition, final position, indx, boolian defining ocv  0.0016325 00143862  00329014
+        BlueRov.add_DOF(.1, 0 ,start_y,final_y,1,true);
+        BlueRov.add_DOF(.1, 0 ,start_z,final_z,2,true);
+        BlueRov.add_DOF(.1, 0,0,0,3,false);
+        BlueRov.add_DOF(.1, 0,0,0,4,false);
+        BlueRov.add_DOF(.1, 0 ,start_thz,final_thz,5,false); // 0.5652
+
+        //*/
+        std::vector<float> objx;
+
+        objx.push_back(ojx);
+
+        //*/
+        std::vector<float> objy;
+
+        objy.push_back(ojy);
+
+        //*/
+        std::vector<float> objz;
+
+        objz.push_back(ojz);
+
+
+        BlueRov.optimize(objx,objy,objz);
+
+        BlueRov.traj(1); // print path
+
+        path_trans = BlueRov.trajectory_translational(); // 61 x 3
+        path_anglu = BlueRov.trajectory_orientation(); // 61 x 1
+
+
+        // pp::PathPlanner<DOF>* planner = new _goPath<DOF>();
+
+        // planner->init_pose(X) = req.x;
+        // planner->init_pose(Y) = req.y;
+        // planner->init_pose(Z) = req.z;
+        // planner->init_pose(THX) = 0;
+        // planner->init_pose(THY) = 0;
+        // planner->init_pose(THZ) = req.thz;
+
+        // planner->init_vel(X) = req.x_vel;
+        // planner->init_vel(Y) = req.y_vel;
+        // planner->init_vel(Z) = req.z_vel;
+        // planner->init_vel(THZ) = req.thz_vel;
+
+        // cout << "INIT POSE: " << planner->init_pose(X) << endl;
+        // cout << "INIT POSE: " << planner->init_pose(Y) << endl;
+        // cout << "INIT POSE: " << planner->init_pose(Z) << endl;
+        // cout << "INIT POSE: " << planner->init_pose(THZ) << endl;
+
+        // planner->goal_pose = goal_pose;
+
+        // cout << "GOAL POSE: " << planner->goal_pose(X) << endl;
+        // cout << "GOAL POSE: " << planner->goal_pose(Y) << endl;
+        // cout << "GOAL POSE: " << planner->goal_pose(Z) << endl;
+        // cout << "GOAL POSE: " << planner->goal_pose(THZ) << endl;
+
+        // planner->add_object(ojx,ojy,ojz);
+
+        // cout << "Object x: " << ojx << endl;
+        // cout << "Object y: " << ojy << endl;
+        // cout << "Object z: " << ojz << endl;
+
+        // planner->setup();
+        
+        // planner->compute();
+
+        // planner->store_results();
+
+        // path_trans = planner->path_trans;
+        // path_anglu = planner->path_angular;
+
+
+        // delete planner;
+
     }
 
     // Increment trajectory index -------------------------
     STEP = STEP + 1;
 
+    
     // std::cout << "Sending desired pose from pp\n";
-
-    res.x_way = planner->get_pose_linear(STEP,0); 
-    res.y_way = planner->get_pose_linear(STEP,1);
-    res.z_way = planner->get_pose_linear(STEP,2);
+    res.x_way = path_trans(STEP,0); 
+    res.y_way = path_trans(STEP,1);
+    res.z_way = path_trans(STEP,2);
     res.thx_way = 0;
     res.thy_way = 0;
-    res.thz_way = planner->get_pose_angular(STEP,0);
+    res.thz_way = path_anglu(STEP,0);
     
     // std::cout << "Desired Angle: " << res.thz_way << std::endl;
     // std::cout << "Desired X: " << res.x_way << std::endl;
@@ -168,22 +270,18 @@ bool pp_waypoint_callback(blue_rov_custom_integration::pathplanner_update_waypoi
         m << req.x,req.y,req.z;
     }
     
-    planner->goal_pose = m;
-
-
-    cout << "x_goal_wp:  " << planner->goal_pose(X) << endl;
-    std::cout << "y_goal_wp:  " << planner->goal_pose(Y) << std::endl;
-    std::cout << "z_goal_wp:  " << planner->goal_pose(Z) << std::endl;
-    std::cout << "yaw_goal_wp:  " << planner->goal_pose(THZ) << std::endl;
-
+    goal_pose = m;
 
 
     if (req.ox == 0 && req.oy == 0 && req.oz == 0) {
+        
         cout << " \n";
         // need a way of not adding objects whenever cv does not add new object otherwise this will add an object to location 0
     }
     else {
-        planner->add_object(req.ox,req.oy,req.oz);
+        ojx = req.ox;
+        ojy = req.oy;
+        ojz = req.oz;
     }
 
     return true;

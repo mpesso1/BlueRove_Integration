@@ -45,19 +45,24 @@ system_state_num = array_to_num(system_state_bit_array)
 
 MODE='POSHOLD'              # initially set mode to POSHOLD on startup according to ROSMAV
 CURRENT_MODE = MODE         # do not need to set the mode on startup because it will be set to POSHOLD on shutdown
+# For start up parameters, this should be defined in the launch file of the project. Therefore there will be no discrepency on what values will be at launch and all files can access the same values
 
 
+# This should be defined in an array... and all other like sets
 # PID thrust data
 PID_THRUST_X = 0 #UNITS: none 
 PID_THRUST_Y = 0 #UNITS: none
 PID_THRUST_Z = 0 #UNITS: none
 PID_THRUST_YAW = 0 #UNITS: none
+# This should be defined in an array... and all other like sets
+
 
 # Offset incoming odom
 OFFSET_X = 0 #UNITS: m
 OFFSET_Y = 0 #UNITS: m
 OFFSET_Z = 0 #UNITS: m
 OFFSET_YAW = 0 #UNITS: rad
+
 
 # Offset ONS on startup
 INIT_OFFSET_LINEAR_ONS = True
@@ -80,9 +85,10 @@ def RESET_SYSTEM_withkey(key):
     '''
     if keyboard.is_pressed(key):
         system_state_bit_array[bitmap_enum['RESET']]
+        
 def RESET_system_check():
     '''
-    check if reset of system byta has been called
+    check if reset of system byte has been called
     '''
     global system_state_bit_array, system_state_num, system_state_byte, bitmap_enum
     if system_state_bit_array[bitmap_enum["RESET"]]:
@@ -198,8 +204,7 @@ update_message_request = 0  # used to continuously remind bluerov of message spe
 
 while not rospy.is_shutdown():
 
-    if reset_ONS:
-        
+    if reset_ONS: # on start up initially set to false
         rovmav.keyboard_controlls(pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,pid_thrust_yaw=0,letsride=True)
         time.sleep(.5)
         rovmav.keyboard_controlls(pid_thrust_x=0,pid_thrust_y=0,pid_thrust_z=0,pid_thrust_yaw=0,letsride=True)
@@ -311,3 +316,7 @@ while not rospy.is_shutdown():
     publish_state.publish(array_to_num(system_state_bit_array))     # Communicate system changes to ROSHUM
 
     rate.sleep()
+    
+    
+    
+    

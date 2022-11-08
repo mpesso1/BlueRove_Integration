@@ -7,7 +7,7 @@ AUTHOR: MASON PESSON
 #include <iostream>
 #include <string>
 #include "ros/ros.h"
-#include "ros_pid.h"
+#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/pid/ros_pid.h"
 #include <Eigen/Dense>
 #include <chrono>
 #include "std_msgs/UInt16.h"

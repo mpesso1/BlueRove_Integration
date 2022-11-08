@@ -1099,7 +1099,7 @@ if __name__ == "__main__":
     # rovmav.request_parameter_value('GND_EXT_BUS')
 
     # rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_ATTITUDE,1000)
-    # rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000)
+    rovmav.request_message_interval(mavutil.mavlink.MAVLINK_MSG_ID_LOCAL_POSITION_NED,1000)
     # rovmav.view_message_loop('SCALED_PRESSURE2')
     # update_req = 0
     # while True:

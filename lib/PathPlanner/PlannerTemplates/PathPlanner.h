@@ -20,7 +20,7 @@ class PathPlanner {
     public:
     
         PathPlanner(){};
-        ~PathPlanner(){};
+        virtual ~PathPlanner(){cout << "Destructor of PathPlanner called\n"; };
 
         Eigen::Matrix<float,Eigen::Dynamic, Eigen::Dynamic> path_trans;
         Eigen::Matrix<float,Eigen::Dynamic, Eigen::Dynamic> path_angular;

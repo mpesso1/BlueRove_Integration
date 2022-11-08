@@ -9,7 +9,7 @@ AUTHOR: MASON PESSON
 import rospy
 from std_msgs.msg import Byte
 from blue_rov_custom_integration.srv import *
-
+import keyboard
 
 # bitmap used to link each index of bitmap value to its meaning... use this to understand what each bit does
 bitmap_enum = {
@@ -49,9 +49,12 @@ def int_to_binary(data):
 
 
 # Object Cordinates
-Ox = None  # UNITS: m
-Oy = None  # UNITS: m
-Oz = None  # UNITS: m
+Ox = 2.66194  # UNITS: m
+Oy = -1.52111  # UNITS: m
+Oz = 1.76056  # UNITS: m
+# // 2.66194
+# // -1.52111
+# // 1.76056
 
 # WPs
 X_WP = []  # UNITS: m
@@ -201,11 +204,12 @@ initial_message = """
 
 print(initial_message)
 
-
+obj_ONS = True
 
 def update_system_state(data):
 
     # Include global variables
+    global obj_ONS
     global system_binary_input
     global system_binary_array_input
     global system_binary_array_current
@@ -221,14 +225,16 @@ def update_system_state(data):
 
     # Convert system_num to binary string
     system_binary_input = int_to_binary(data.data)
-    
+
     # Store binary value in an array
     system_binary_array_input = string_byte_to_array(system_binary_input)
     
     # Action on changed binary value
     if data.data != None: # if data is actually being recieved 
-        if data.data != system_num_last and data.data <= 15: # if system number has changed and not in stabilize mode
+        
+        if data.data != system_num_last and data.data <= 15: # if system number has changed and not in stabilize mode (0001111)
             
+            print("looping")
             system_num_last = data.data
 
             # Initiate communication with Path Planner
@@ -241,6 +247,7 @@ def update_system_state(data):
 
             pp_response = pp_server(ask_if_new_path_needed,cv_said_new_path,reset_pathplanner_NEED_NEW_WP)  # cv_said_new_path coming from cv node and communicated through cv service
             reset_pathplanner_NEED_NEW_WP = False
+            
             # Set path planner healthy bit true if path planner says so
             if pp_response.pp_healthy: 
                 system_binary_array_input[bitmap_enum['PP_HEALTH']] = 1          # set to true if we can communicate
@@ -257,6 +264,7 @@ def update_system_state(data):
 
                         if not pp_response.cv_enforced: # incrament the waypoint if the new traj is not because of new object defined by cv
                             wpIDX = wpIDX + 1
+                            # print("Waypoint index incremented")
                             if wpIDX >= TOTAL_WAYPOINTS:
                                 NO_MORE_WAYPOINTS = True
 
@@ -303,6 +311,7 @@ def update_system_state(data):
                             system_binary_array_input[bitmap_enum['PID_HEALTH']] = 1
                         if NO_MORE_WAYPOINTS:
                             MISSION_COMPLETE_FLAG = True
+                            # print("Mission Complete flag set to true")
 
                     else:
                         # Initiate communication with pid
@@ -341,24 +350,56 @@ def update_system_state(data):
                 
     else:
         print("\033[1;33m WARNING: Not recieving messages from ROVMAV... value is None \033[m \n\n") 
+        
+    if keyboard.is_pressed('t') and obj_ONS:
+        print("T WAS PRESSED")
+        cv_said_new_path = True
+        
+# // 5.00971
+# // -2.5467
+# // 2.32233
+        
+        Ox = 5.00971
+        Oy = -3 #-2.5467
+        Oz = 1.85 #2.32233
+        
+        obj_ONS = False
+        
+        rospy.wait_for_service('pid_system_control')
+
+        # Define object used to communicate over service
+        pid_server = rospy.ServiceProxy("pid_system_control",control_pid) 
+        turn_pid_on = False
+        turn_pid_off = not turn_pid_on
+        pid_response = pid_server(turn_pid_on, turn_pid_off, True) # last argument indicates if a new path is being generated
+        
+        wpIDX = wpIDX - 1
+        MISSION_COMPLETE_FLAG = False 
+        NO_MORE_WAYPOINTS = False
+
+        rospy.wait_for_service('byte_update')
+        ROV_client = rospy.ServiceProxy("byte_update",byte_update)
+        ROVMAV_response = ROV_client(0)
+        
+
 
 
 
 
 def cv_action_callback(req):
     global cv_said_new_path
-    global Ox
-    global Oy
-    global Oz
+    # global Ox
+    # global Oy
+    # global Oz
 
     global system_binary_array_current
     system_binary_array_current[bitmap_enum['SYS_HEALTH']] = 0
 
     cv_said_new_path = True
 
-    Ox = req.x
-    Oy = req.y
-    Oz = req.z
+    # Ox = req.x
+    # Oy = req.y
+    # Oz = req.z
 
     return cv_actionResponse(True)
 

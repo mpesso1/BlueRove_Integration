@@ -16,68 +16,68 @@ root::MeanTraj::MeanTraj(int DOF, int num_of_steps, int ocv) {
     // Prior Variables --------------------------
     DsOF = DOF; // Degrees of Freedom
 
-    init_parameter.resize(4,DOF); // input required to initiate a DOFs path
+    init_parameter = Eigen::ArrayXXf::Zero(4,DOF); // input required to initiate a DOFs path
 
     steps = num_of_steps; // trajectory steps
 
-    B.resize(steps+2,steps+1); // MATRIX
+    B = Eigen::ArrayXXf::Zero(steps+2,steps+1); // MATRIX
 
-    Q.resize(steps+2,steps+2); // MATRIX
+    Q = Eigen::ArrayXXf::Zero(steps+2,steps+2); // MATRIX
 
-    Ka_inv.resize(steps+1,steps+1); // ACCELERATION INVERSE KERNAL
+    Ka_inv = Eigen::ArrayXXf::Zero(steps+1,steps+1); // ACCELERATION INVERSE KERNAL
 
-    Kv_inv.resize(steps+1,steps+1); // VELOCITY INVERSE KERNAL
+    Kv_inv = Eigen::ArrayXXf::Zero(steps+1,steps+1); // VELOCITY INVERSE KERNAL
 
-    Kv.resize(steps+1,steps+1); // VELOCITY KERNAL
+    Kv = Eigen::ArrayXXf::Zero(steps+1,steps+1); // VELOCITY KERNAL
 
-    Kp_inv.resize(steps+1,steps+1); // POSITION INVERSE KERNAL
+    Kp_inv = Eigen::ArrayXXf::Zero(steps+1,steps+1); // POSITION INVERSE KERNAL
 
-    Kp.resize(steps+1,steps+1); // POSITION KERNAL
+    Kp = Eigen::ArrayXXf::Zero(steps+1,steps+1); // POSITION KERNAL
     // -------------------------------------------
 
 
     // Optimization Variabels --------------------
     ocv_size = ocv; // DOFs contrained by workspace objects
 
-    mag_ocv.resize(1,steps+1); // Velocity vector magnitude for each DOF
+    mag_ocv = Eigen::ArrayXXf::Zero(1,steps+1); // Velocity vector magnitude for each DOF
 
-    J.resize(steps+1,ocv_size); // Jacobian
+    J = Eigen::ArrayXXf::Zero(steps+1,ocv_size); // Jacobian
 
-    unit_prime.resize(ocv_size,steps+1); 
+    unit_prime = Eigen::ArrayXXf::Zero(ocv_size,steps+1); 
 
-    unit_dubprime.resize(ocv_size,steps+1);
+    unit_dubprime = Eigen::ArrayXXf::Zero(ocv_size,steps+1);
 
-    del_c.resize(ocv_size,1);
+    del_c = Eigen::ArrayXXf::Zero(ocv_size,1);
 
-    final_pos.resize(steps+1,ocv_size); // FINAL POSITION TRAJECTORY
+    final_pos = Eigen::ArrayXXf::Zero(steps+1,ocv_size); // FINAL POSITION TRAJECTORY
 
-    mean_pos.resize(steps+1,ocv_size); // NON OPTIMIZED POSITION TRAJECTORY
+    mean_pos = Eigen::ArrayXXf::Zero(steps+1,ocv_size); // NON OPTIMIZED POSITION TRAJECTORY
 
-    final_vel.resize(steps+1,ocv_size); // FINAL VELOCITY TRAJECTORY
+    final_vel = Eigen::ArrayXXf::Zero(steps+1,ocv_size); // FINAL VELOCITY TRAJECTORY
 
-    mean_vel.resize(steps+1,ocv_size); // NON OPTIMIZED VELOCITY TRAJECTORY
+    mean_vel = Eigen::ArrayXXf::Zero(steps+1,ocv_size); // NON OPTIMIZED VELOCITY TRAJECTORY
 
     I = Eigen::Matrix<float,3,3>::Identity(); // identity matrix
 
     IJ = I;
 
-    g_pos.resize(ocv,steps+1);
+    g_pos = Eigen::ArrayXXf::Zero(ocv,steps+1);
 
-    g_vel.resize(ocv,steps+1);
+    g_vel = Eigen::ArrayXXf::Zero(ocv,steps+1);
 
-    obs.resize(ocv,1); // OBSTICAL MATRIX
+    obs = Eigen::ArrayXXf::Zero(ocv,1); // OBSTICAL MATRIX
 
-    check_pos.resize(steps+1,ocv_size);
+    check_pos = Eigen::ArrayXXf::Zero(steps+1,ocv_size);
     // -------------------------------------------
 
-    thz_init.resize(steps+1,1);
+    thz_init = Eigen::ArrayXXf::Zero(steps+1,1);
 
 }
 // --------------------------------------------------------------------
 
 
-// Default Destructor -------------------------------------------------
-root::MeanTraj::~MeanTraj(){ 
+// Override Destructor -------------------------------------------------
+root::MeanTraj::~MeanTraj(){ std::cout << "MeanTraj destructor called\n";
 }
 // --------------------------------------------------------------------
 
@@ -191,6 +191,7 @@ void root::MeanTraj::define_step() {
 void root::MeanTraj::update_accel() {
     for (int i=0; i<=DsOF-1;i++) {
         init_parameter(ACCEL,i) = 2/pow(max_time,2)*((init_parameter(Pf,i)-init_parameter(P0,i))-init_parameter(V0,i)*max_time);
+
     }
 }
 // --------------------------------------------------------------------
@@ -200,6 +201,7 @@ void root::MeanTraj::update_accel() {
 void root::MeanTraj::define_states() {
     float time_step=0;
     int i=0;
+
     while (time_step <= max_time+.00001) {
         for (int j=0; j<ocv_size; j++) {
             mean_pos(i,j) = init_parameter(ACCEL,j)*pow(time_step,2)/2 + init_parameter(V0,j)*time_step + init_parameter(P0,j);
@@ -227,6 +229,8 @@ void root::MeanTraj::define_B() {
 
 // Define needed matrix -----------------------------------------------
 void root::MeanTraj::define_Q() {
+    std::cout << "Sen 2: " << sensitivity[2] << std::endl;
+    std::cout << "step size: " << step << std::endl;
     for (int i=0; i<Q.cols(); i++) {
         Q(i,i) = sensitivity[2]*step;
     }
@@ -310,7 +314,7 @@ void root::MeanTraj::update_optimizaion() {
     }
     check_pos = final_pos;
 
-    update_g(.4,1);
+    update_g(.5,1);
 }
 // --------------------------------------------------------------------
 
@@ -326,14 +330,19 @@ void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,
         obs(z,1) = obj_y[z];
         obs(z,2) = obj_z[z];
     }
+
+    std::cout << "Objects: " << obs << std::endl;
+
     if (obs.rows() != 0) {
-        update_g(.4,1);
+        update_g(.5,1);
 
-
+        std::cout << "Sensitivity 1: " << sensitivity[0] << " Sensitivity 2: " << sensitivity[1] << " Sensitivity 3: " << sensitivity[2] << std::endl;
+        // std::cout << (/*Kp**/(B/**(final_pos-mean_pos*/) /*+ g_pos.transpose()*/).transpose() << std::endl;
         for (int i=0;i<1000;i++) { // number of iteration of optimizaion.  This needs a new criterion to define when it finishes
+
             final_pos = final_pos - (sensitivity[0])*Kp*(sensitivity[1]*Kp_inv*(final_pos-mean_pos) + g_pos.transpose());
             final_vel = final_vel - (sensitivity[0])*Kv*(sensitivity[1]*Kv_inv*(final_vel-mean_vel) + g_vel.transpose());
-            
+
 
             // if (i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450) { //i == 10 || i == 20 || i == 350 || i == 375 || i == 390 || i == 400 || i == 450
             //     std::cout << final_pos.transpose() << std::endl;
@@ -343,6 +352,7 @@ void root::MeanTraj::optimize(std::vector<float> obj_x,std::vector<float> obj_y,
             // }
             
             if (final_pos.isApprox(check_pos,.00001)) {
+                std::cout << "Reached final path at iteration: " << i << std::endl;
                 // std::cout << "mason" << std::endl;
                 break;
             }
