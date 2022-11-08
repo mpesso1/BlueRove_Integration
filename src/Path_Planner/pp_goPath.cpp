@@ -7,7 +7,7 @@ AUTHOR: MASON PESSON
 // #include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_Astar.h"
 // #include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PlannerTemplates/_omplRRTConnect.h"
 
-#include "/home/mason/catkin_ws/src/blue_rov_custom_integration/lib/PathPlanner/PathPlanners/goPath.h"
+#include "../../lib/PathPlanner/PathPlanners/goPath.h"
 
 #include <Eigen/Dense>
 #include <iostream>
