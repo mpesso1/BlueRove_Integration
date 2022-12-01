@@ -55,7 +55,6 @@ const int DOF = 6;
 
 Eigen::Matrix<float,61, 3> path_trans;
 Eigen::Matrix<float,61, 1> path_anglu;
-
 Eigen::Matrix<float,1,DOF> goal_pose;
 
 float ojx {};
