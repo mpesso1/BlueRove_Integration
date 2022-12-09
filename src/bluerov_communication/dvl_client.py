@@ -7,51 +7,55 @@ from nav_msgs.msg import Odometry
 
 from time import sleep
 
+
 class ROS():
     def __init__(self, client):
         rospy.init_node('DVL_DATA')
         self.odom = rospy.Publisher("/DVL_ODOM", Odometry, queue_size=100)
-        self.doppler = rospy.Publisher("/DVL_DOPPLER", Odometry, queue_size=100)
-        
+        self.doppler = rospy.Publisher(
+            "/DVL_DOPPLER", Odometry, queue_size=100)
+
         self.dead_reckon = Odometry()
         self.doppler_data = Odometry()
 
-        self.rate = rospy.Rate(10) # 10hz
-        
+        self.rate = rospy.Rate(100)  # 10hz
+
         self.dvl = client
-        
+
     def run(self):
         while not rospy.is_shutdown():
             data = json.loads(self.dvl.get().decode("utf-8"))
             
+            # print(data)
+
             self.dead_reckon.header.stamp = rospy.Time.now()
             self.doppler_data.header.stamp = rospy.Time.now()
             if (data['type'] == 'velocity'):
-                self.doppler_data.twist.twist.linear.x = data['vx']
-                self.doppler_data.twist.twist.linear.y = data['vy']
-                self.doppler_data.twist.twist.linear.z = data['vz']
-                
-                self.doppler.publish(self.doppler_data)
-                
+                if (data['vx'] != 0):
+                    self.doppler_data.twist.twist.linear.x = data['vx']
+                    self.doppler_data.twist.twist.linear.y = data['vy']
+                    self.doppler_data.twist.twist.linear.z = data['vz']
+                    # print(data['vx'])
+                    self.doppler.publish(self.doppler_data)
+
             elif (data['type'] == 'position_local'):
                 self.dead_reckon.pose.pose.position.x = data['x']
                 self.dead_reckon.pose.pose.position.y = data['y']
                 self.dead_reckon.pose.pose.position.z = data['z']
-                self.dead_reckon.pose.pose.orientation.x = data['x']
-                self.dead_reckon.pose.pose.orientation.y = data['y']
-                self.dead_reckon.pose.pose.orientation.z = data['z']
-                
+                self.dead_reckon.pose.pose.orientation.x = data['roll']
+                self.dead_reckon.pose.pose.orientation.y = data['pitch']
+                self.dead_reckon.pose.pose.orientation.z = data['yaw']
+
                 self.odom.publish(self.dead_reckon)
 
             self.rate.sleep()
-        
-    
+
 
 class DVLclient():
     def __init__(self, ip, port):
         self.ip = ip
         self.port = port
-        
+
     def connect(self):
         try:
             self.s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -70,20 +74,21 @@ class DVLclient():
             if rec == b'\n':
                 break
             raw_data += rec
+        # print(raw_data)
         return (raw_data)
 
     def run(self):
         while True:
             self.get()
-        
+
 
 if __name__ == '__main__':
-    
-    TCP_IP =  "192.168.2.95" 
-    TCP_PORT =  16171
-    
+
+    TCP_IP = "192.168.2.95"
+    TCP_PORT = 16171
+
     client = DVLclient(TCP_IP, TCP_PORT)
     client.connect()
-    
+
     ros = ROS(client)
     ros.run()
